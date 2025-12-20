@@ -18,8 +18,9 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
+      httpOnly: true,
       secure: false, // true solo si usas HTTPS
-      maxAge: 1000 * 60 * 60 * 2 // 2 horas
+      maxAge: 1000 * 60 * 60 * 24 // 24 horas
     }
   })
 );

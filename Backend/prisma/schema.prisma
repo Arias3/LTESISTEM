@@ -39,11 +39,14 @@ model User {
   password String
   role     Role   @default(OPERATOR)
 
-  // Relación con dispositivos (opcional: dueño / asignado)
   devices Device[]
+
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
 
   createdAt DateTime @default(now())
 }
+
 
 model Device {
   id     String       @id @default(uuid())
@@ -84,4 +87,22 @@ model SensorReading {
 
   @@index([deviceId])
   @@index([timestamp])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  
+  content   String
+
+  senderId  String
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id])
+
+  receiverId String
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([createdAt])
 }
