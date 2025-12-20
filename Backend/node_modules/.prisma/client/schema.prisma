@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//////////////////////////////////////////////////
+// ENUMS
+//////////////////////////////////////////////////
+
+enum Role {
+  ADMIN
+  OPERATOR
+  MOBILE
+}
+
+enum DeviceType {
+  FIXED
+  MOBILE
+}
+
+enum DeviceStatus {
+  ACTIVE
+  INACTIVE
+  ALERT
+}
+
+//////////////////////////////////////////////////
+// MODELOS
+//////////////////////////////////////////////////
+
+model User {
+  id       String @id @default(uuid())
+  name     String
+  username String @unique
+  password String
+  role     Role   @default(OPERATOR)
+
+  // Relación con dispositivos (opcional: dueño / asignado)
+  devices Device[]
+
+  createdAt DateTime @default(now())
+}
+
+model Device {
+  id     String       @id @default(uuid())
+  name   String
+  type   DeviceType
+  status DeviceStatus @default(ACTIVE)
+
+  // Ubicación actual (si aplica)
+  latitude  Float?
+  longitude Float?
+
+  // Relación con usuario (opcional)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  // Relación con lecturas de sensores
+  readings SensorReading[]
+
+  createdAt DateTime @default(now())
+}
+
+model SensorReading {
+  id String @id @default(uuid())
+
+  // Relación con dispositivo
+  deviceId String
+  device   Device @relation(fields: [deviceId], references: [id])
+
+  // Sensores disponibles
+  temperature Float?
+  humidity    Float?
+  pirDetected Boolean? // true si detectó movimiento
+
+  latitude  Float?
+  longitude Float?
+
+  timestamp DateTime @default(now())
+
+  @@index([deviceId])
+  @@index([timestamp])
+}
