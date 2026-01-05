@@ -31,7 +31,7 @@ export async function getUserById(id) {
 
 export async function createUser({ name, username, password, role }) {
   const exists = await prisma.user.findUnique({ where: { username } });
-  if (exists) throw new Error("El username ya existe");
+  if (exists) throw new Error("Este usuario ya existe");
 
   const hashed = await bcrypt.hash(password, SALT_ROUNDS);
 

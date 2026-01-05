@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { chatService } from "./chat.service.js";
+import { prisma } from "../../config/prisma.js";
 
 const router = Router();
 
-// Middleware simple para asegurar login
 function requireAuth(req, res, next) {
   if (!req.session?.user) {
     return res.status(401).json({ error: "No autenticado" });
@@ -11,64 +11,48 @@ function requireAuth(req, res, next) {
   next();
 }
 
-/**
- * Enviar mensaje
- * POST /api/chat/send
- * body: { receiverId, content }
- */
+/* ================= SEND ================= */
 router.post("/send", requireAuth, async (req, res) => {
+  const { receiverId, content } = req.body;
+  const senderId = req.session.user.id;
+
   try {
-    const senderId = req.session.user.id;
-    const { receiverId, content } = req.body;
-
-    if (!receiverId || !content) {
-      return res.status(400).json({ error: "Datos incompletos" });
-    }
-
     const msg = await chatService.sendMessage(senderId, receiverId, content);
     res.json(msg);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error al enviar mensaje" });
+  }
+});
 
+/* ================= CONVERSATIONS LIST ================= */
+router.get("/conversations", requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const conversations = await chatService.getConversations(userId);
+    res.json(conversations);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-/**
- * Obtener conversación con otro usuario
- * GET /api/chat/conversation/:otherUserId
- * opcional query: ?lastMessageId=xxxx
- */
+/* ================= SINGLE CONVERSATION ================= */
 router.get("/conversation/:otherUserId", requireAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
-    const otherUserId = req.params.otherUserId;
-    const lastMessageId = req.query.lastMessageId || null;
+    const { otherUserId } = req.params;
+    const { after } = req.query;
 
     const messages = await chatService.getConversation(
       userId,
       otherUserId,
-      lastMessageId
+      after || null
     );
 
     res.json(messages);
-
   } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/**
- * Últimos mensajes del usuario
- * GET /api/chat/last
- */
-router.get("/last", requireAuth, async (req, res) => {
-  try {
-    const userId = req.session.user.id;
-    const messages = await chatService.getLastMessages(userId);
-    res.json(messages);
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: "Error al obtener mensajes" });
   }
 });
 

@@ -4,47 +4,60 @@ class ChatService {
 
   async sendMessage(senderId, receiverId, content) {
     return prisma.message.create({
-      data: { senderId, receiverId, content }
+      data: { senderId, receiverId, content },
     });
   }
 
-  async getConversation(userId, otherUserId, lastMessageId = null) {
-
-    const whereQuery = lastMessageId
-      ? {
-          OR: [
-            { senderId: userId, receiverId: otherUserId },
-            { senderId: otherUserId, receiverId: userId }
-          ],
-          id: { gt: lastMessageId }
-        }
-      : {
-          OR: [
-            { senderId: userId, receiverId: otherUserId },
-            { senderId: otherUserId, receiverId: userId }
-          ]
-        };
-
-    return prisma.message.findMany({
-      where: whereQuery,
-      orderBy: { createdAt: "asc" },
-      take: 50   // Importante para no matar el backend
-    });
-  }
-
-  async getLastMessages(userId) {
-    return prisma.message.findMany({
+  async getConversations(userId) {
+    const messages = await prisma.message.findMany({
       where: {
         OR: [
           { senderId: userId },
-          { receiverId: userId }
-        ]
+          { receiverId: userId },
+        ],
       },
       orderBy: { createdAt: "desc" },
-      take: 30
+      take: 100,
     });
+
+    const map = new Map();
+
+    for (const msg of messages) {
+      const otherUserId =
+        msg.senderId === userId ? msg.receiverId : msg.senderId;
+
+      if (!map.has(otherUserId)) {
+        const user = await prisma.user.findUnique({
+          where: { id: otherUserId },
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        });
+
+        map.set(otherUserId, {
+          user,
+          lastMessage: msg,
+        });
+      }
+    }
+
+    return Array.from(map.values());
   }
 
+  async getConversation(userId, otherUserId, after = null) {
+    return prisma.message.findMany({
+      where: {
+        OR: [
+          { senderId: userId, receiverId: otherUserId },
+          { senderId: otherUserId, receiverId: userId },
+        ],
+        ...(after && { createdAt: { gt: new Date(after) } }),
+      },
+      orderBy: { createdAt: "asc" }, // chat natural
+    });
+  }
 }
 
 export const chatService = new ChatService();

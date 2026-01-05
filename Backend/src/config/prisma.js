@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
 
 export const prisma = new PrismaClient({
-  log: ["query", "error", "warn"]  // útil para depurar
+  log: ["error", "warn"]  // útil para depurar
 });

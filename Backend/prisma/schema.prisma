@@ -47,58 +47,40 @@ model User {
   createdAt DateTime @default(now())
 }
 
-
 model Device {
-  id     String       @id @default(uuid())
-  name   String
-  type   DeviceType
-  status DeviceStatus @default(ACTIVE)
-
-  // Ubicación actual (si aplica)
-  latitude  Float?
-  longitude Float?
-
-  // Relación con usuario (opcional)
-  userId String?
-  user   User?   @relation(fields: [userId], references: [id])
-
-  // Relación con lecturas de sensores
-  readings SensorReading[]
+  id               String @id @default(cuid())
+  displayName      String
+  ipAddress        String
+  status           String @default("pending") // ACTIVE, INACTIVE, DEFECTUOSO
+  samplingInterval Int    @default(3) // segundos, frecuencia de polling
+  sensors          Json? // JSON con los sensores
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  User      User?    @relation(fields: [userId], references: [id])
+  userId    String?
 }
 
-model SensorReading {
-  id String @id @default(uuid())
-
-  // Relación con dispositivo
-  deviceId String
-  device   Device @relation(fields: [deviceId], references: [id])
-
-  // Sensores disponibles
-  temperature Float?
-  humidity    Float?
-  pirDetected Boolean? // true si detectó movimiento
-
-  latitude  Float?
-  longitude Float?
-
-  timestamp DateTime @default(now())
-
-  @@index([deviceId])
-  @@index([timestamp])
+model Sensor {
+  id               String    @id @default(cuid())
+  deviceId         String
+  type             String
+  unit             String?
+  friendlyName     String
+  samplingInterval Int?
+  lastValue        Float?
+  lastUpdateAt     DateTime?
 }
 
 model Message {
-  id        String   @id @default(uuid())
-  
-  content   String
+  id      String @id @default(uuid())
+  content String
 
-  senderId  String
-  sender    User     @relation("SentMessages", fields: [senderId], references: [id])
+  senderId String
+  sender   User   @relation("SentMessages", fields: [senderId], references: [id])
 
   receiverId String
-  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  receiver   User   @relation("ReceivedMessages", fields: [receiverId], references: [id])
 
   createdAt DateTime @default(now())
 
