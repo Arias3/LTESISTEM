@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { useCallStore } from "../stores/call";
 import PhoneIcon from "../components/icons/PhoneIcon.vue";
@@ -46,6 +46,8 @@ const messages = ref<Message[]>([]);
 const loadingMessages = ref(false);
 const newMessage = ref("");
 const sending = ref(false);
+const isKeyboardVisible = ref(false);
+const keyboardHeight = ref(0);
 
 /* ================= COMPUTED ================= */
 
@@ -59,7 +61,7 @@ const filteredContacts = computed(() => {
   return contacts.value.filter(
     (u) =>
       u.name.toLowerCase().includes(term) ||
-      u.username.toLowerCase().includes(term)
+      u.username.toLowerCase().includes(term),
   );
 });
 
@@ -68,16 +70,22 @@ const filteredContacts = computed(() => {
 async function loadContacts() {
   const res = await fetch(`${API_URL}/api/auth`, {
     credentials: "include",
+    headers: auth.getAuthHeaders() as Record<string, string>,
   });
-  const users: User[] = await res.json();
-  contacts.value = users.filter((u) => u.id !== auth.user.id);
+  if (res.ok) {
+    const users: User[] = await res.json();
+    contacts.value = users.filter((u) => u.id !== auth.user.id);
+  }
 }
 
 async function loadConversations() {
   const res = await fetch(`${API_URL}/api/chat/conversations`, {
     credentials: "include",
+    headers: auth.getAuthHeaders() as Record<string, string>,
   });
-  conversations.value = await res.json();
+  if (res.ok) {
+    conversations.value = await res.json();
+  }
 }
 
 onMounted(async () => {
@@ -94,7 +102,10 @@ async function sendMessage() {
     const res = await fetch(`${API_URL}/api/chat/send`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...auth.getAuthHeaders(),
+      } as Record<string, string>,
       body: JSON.stringify({
         receiverId: selectedContact.value.id,
         content: newMessage.value,
@@ -139,7 +150,6 @@ function formatMessageTime(dateStr: string) {
       .padStart(2, "0")}/${date.getFullYear()}`;
   }
 }
-import { onUnmounted } from "vue";
 /* ================= POLLING ================= */
 let pollingTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -155,7 +165,8 @@ async function loadNewMessages() {
     `${API_URL}/api/chat/conversation/${selectedContact.value.id}${query}`,
     {
       credentials: "include",
-    }
+      headers: auth.getAuthHeaders() as Record<string, string>,
+    },
   );
 
   if (res.ok) {
@@ -172,7 +183,7 @@ async function loadNewMessages() {
         // actualizar conversación
         const last = onlyNew[onlyNew.length - 1];
         const conv = conversations.value.find(
-          (c) => c.user.id === selectedContact.value?.id
+          (c) => c.user.id === selectedContact.value?.id,
         );
         if (conv && last) {
           conv.lastMessage = last;
@@ -200,6 +211,14 @@ async function openChat(user: User) {
 
   // Iniciar nuevo polling cada 3 segundos
   pollingTimer = setInterval(loadNewMessages, 3000);
+
+  // Agregar listeners del teclado
+  addKeyboardListeners();
+
+  // Scroll al final después de cargar mensajes
+  nextTick(() => {
+    scrollToBottom();
+  });
 }
 
 // Cerrar chat y detener polling
@@ -210,6 +229,9 @@ function closeChat() {
     clearInterval(pollingTimer);
     pollingTimer = null;
   }
+
+  // Remover listeners del teclado
+  removeKeyboardListeners();
 }
 
 function switchChat(user: User) {
@@ -227,7 +249,66 @@ onUnmounted(() => {
     clearInterval(pollingTimer);
     pollingTimer = null;
   }
+  removeKeyboardListeners();
 });
+
+// ================= KEYBOARD HANDLING ================= */
+function addKeyboardListeners() {
+  if (typeof window === "undefined") return;
+
+  const viewport = window.visualViewport;
+
+  if (viewport) {
+    viewport.addEventListener("resize", handleVisualViewportResize);
+  } else {
+    window.addEventListener("resize", handleWindowResize);
+  }
+}
+
+function removeKeyboardListeners() {
+  if (typeof window === "undefined") return;
+
+  const viewport = window.visualViewport;
+
+  if (viewport) {
+    viewport.removeEventListener("resize", handleVisualViewportResize);
+  } else {
+    window.removeEventListener("resize", handleWindowResize);
+  }
+}
+
+function handleVisualViewportResize() {
+  if (!window.visualViewport) return;
+
+  const viewport = window.visualViewport;
+  const heightDiff = window.innerHeight - viewport.height;
+
+  if (heightDiff > 150) {
+    // Teclado visible
+    isKeyboardVisible.value = true;
+    keyboardHeight.value = heightDiff;
+    scrollToBottom();
+  } else {
+    isKeyboardVisible.value = false;
+    keyboardHeight.value = 0;
+  }
+}
+
+function handleWindowResize() {
+  // Fallback simple
+  setTimeout(() => {
+    scrollToBottom();
+  }, 300);
+}
+
+function scrollToBottom() {
+  nextTick(() => {
+    const chatBody = document.querySelector(".chat-body") as HTMLElement;
+    if (chatBody) {
+      chatBody.scrollTop = chatBody.scrollHeight;
+    }
+  });
+}
 
 // ================= CALLS ================= */
 const call = useCallStore();
@@ -243,7 +324,7 @@ const startAudioCall = () => {
       id: selectedContact.value.id,
       name: selectedContact.value.name,
     },
-    "audio"
+    "audio",
   );
 };
 
@@ -255,7 +336,7 @@ const startVideoCall = () => {
       id: selectedContact.value.id,
       name: selectedContact.value.name,
     },
-    "video"
+    "video",
   );
 };
 </script>
@@ -278,10 +359,16 @@ const startVideoCall = () => {
           <div class="avatar"></div>
           <div class="chat-info">
             <div class="chat-name">{{ conv.user.name }}</div>
-            <div class="chat-last">{{ conv.lastMessage.content }}</div>
+            <div class="chat-last">
+              {{ conv.lastMessage?.content || "No messages yet" }}
+            </div>
           </div>
           <div class="chat-time">
-            {{ formatMessageTime(conv.lastMessage.createdAt) }}
+            {{
+              conv.lastMessage
+                ? formatMessageTime(conv.lastMessage.createdAt)
+                : ""
+            }}
           </div>
         </div>
       </div>
@@ -543,7 +630,9 @@ const startVideoCall = () => {
   background: #2547e2;
   font-size: 14px;
   line-height: 1.45;
-  box-shadow: #232533 0px 2px 5px 0px, #0c1748 0px 1px 2px 0px;
+  box-shadow:
+    #232533 0px 2px 5px 0px,
+    #0c1748 0px 1px 2px 0px;
 }
 
 .message.me {
@@ -566,7 +655,9 @@ const startVideoCall = () => {
   padding: 12px;
   border-top: 1px solid #1b2027;
   background: #020617;
-  box-shadow: #232533 0px 2px 5px 0px, #0c1748 0px 1px 2px 0px;
+  box-shadow:
+    #232533 0px 2px 5px 0px,
+    #0c1748 0px 1px 2px 0px;
 }
 
 .chat-input input {
@@ -694,10 +785,21 @@ const startVideoCall = () => {
 
   .chat-body {
     padding: 12px;
+    padding-bottom: 80px; /* Ajuste para evitar superposición con input fijo */
   }
 
   .chat-input {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
     padding: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    background: #020617;
+    z-index: 1000;
+    box-shadow:
+      #232533 0px -2px 5px 0px,
+      #0c1748 0px -1px 2px 0px;
   }
 
   .message {

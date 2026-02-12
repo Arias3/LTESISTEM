@@ -56,8 +56,8 @@ router.beforeEach(async (to) => {
   const auth = useAuthStore();
 
   if (to.meta.requiresAuth) {
-    const ok = await auth.checkSession();
-    if (!ok) return "/login";
+    await auth.checkAuth();
+    if (!auth.isAuthenticated) return "/login";
   }
 });
 

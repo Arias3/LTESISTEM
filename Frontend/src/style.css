@@ -17,13 +17,13 @@ body {
 
 @font-face {
   font-family: "Zen";
-  src: url("./fonts/zen.ttf") format("truetype");
+  src: url("./assets/fonts/zen.ttf") format("opentype");
   font-weight: normal;
   font-style: normal;
 }
 @font-face {
   font-family: 'Inter';
-  src: url('@/assets/fonts/inter/Inter-VariableFont_opsz,wght.ttf') format('truetype');
+  src: url('@/assets/fonts/Inter/Inter-VariableFont_opsz,wght.ttf') format('truetype');
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -31,7 +31,7 @@ body {
 
 @font-face {
   font-family: 'Inter';
-  src: url('@/assets/fonts/inter/Inter-Italic-VariableFont_opsz,wght.ttf') format('truetype');
+  src: url('@/assets/fonts/Inter/Inter-Italic-VariableFont_opsz,wght.ttf') format('truetype');
   font-weight: 100 900;
   font-style: italic;
   font-display: swap;

@@ -1,7 +1,7 @@
 import authRoutes from "./modules/auth/auth.routes.js";
 import chatRoutes from "./modules/chat/chat.routes.js";
 import sensorsRoutes from "./modules/sensors/sensors.routes.js";
-import { requireAuth } from "./middleware/authSession.js";
+import { requireAuth } from "./middleware/authJWT.js";
 import express from "express";
 
 const router = express.Router();

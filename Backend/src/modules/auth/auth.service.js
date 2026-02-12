@@ -1,8 +1,10 @@
-import { prisma } from "../../app.js";
+import { prisma } from "../../config/prisma.js";
 import bcrypt from "bcryptjs";
-
+import jwt from "jsonwebtoken";
 
 const SALT_ROUNDS = 10;
+const JWT_SECRET = process.env.JWT_SECRET || "default-secret"; // Use env var in production
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "1h";
 
 export async function getUsers() {
   return prisma.user.findMany({
@@ -83,11 +85,26 @@ export async function loginBasic({ username, password }) {
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) throw new Error("Contraseña incorrecta");
 
+  // Generate JWT token
+  const token = jwt.sign(
+    {
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      role: user.role
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
+
   return {
-    id: user.id,
-    name: user.name,
-    username: user.username,
-    role: user.role
+    user: {
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      role: user.role
+    },
+    token
   };
 }
 
