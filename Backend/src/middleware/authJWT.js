@@ -13,7 +13,6 @@ export function requireAuth(req, res, next) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded; // 🔹 guardar info completa del usuario
-    console.log('Decoded token:', decoded);
     next();
   } catch (err) {
     console.log('Token verification error:', err);

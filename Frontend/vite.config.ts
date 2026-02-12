@@ -4,7 +4,7 @@ import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
   server: {
-    host: true,
+    host: '0.0.0.0', // Permite acceso tanto local como desde la red
     port: 4000,
   },
   plugins: [

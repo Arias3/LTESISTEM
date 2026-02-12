@@ -1,3 +1,10 @@
+# TODO: Improve Responsiveness of MessagesView.vue for Mobile
+
+- [x] Add computed property chatBodyStyle to dynamically adjust chat-body height and padding-top in mobile
+- [x] Update template to apply :style="chatBodyStyle" to chat-body div
+- [x] Adjust mobile CSS: make chat-header position: fixed (top: 0, full width, high z-index)
+- [x] Remove static padding-bottom from chat-body in mobile media query
+
 # TODO: Migrate to JWT Authentication for Multi-Network Support
 
 - [x] Install jsonwebtoken package in Backend

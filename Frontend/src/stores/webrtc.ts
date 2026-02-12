@@ -19,7 +19,7 @@ export const useWebRTCStore = defineStore("webrtc", {
       console.log("🎤 Solicitando permisos para:", mode);
 
       try {
-        // Intentar con configuración más permisiva
+        // Configuración de medios
         const constraints: MediaStreamConstraints = {
           audio: {
             echoCancellation: true,

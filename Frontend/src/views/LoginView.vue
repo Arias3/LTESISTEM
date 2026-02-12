@@ -115,7 +115,7 @@ const pressIngresar = async () => {
   justify-content: center;
   align-items: center;
 
-  font-family: sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
 }
 
 .error {

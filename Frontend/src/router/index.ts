@@ -7,7 +7,7 @@ import DashboardView from "../views/DashboardView.vue";
 
 import StatsView from "../views/StatsView.vue";
 import MessagesView from "../views/MessagesView.vue";
-import PersonalView from "../views/PersonalView.vue";
+import GeoView from "../views/GeoView.vue";
 import NetworkView from "../views/NetworkView.vue";
 
 const router = createRouter({
@@ -38,9 +38,9 @@ const router = createRouter({
           component: MessagesView
         },
         {
-          path: "personal",
-          name: "personal",
-          component: PersonalView
+          path: "geo",
+          name: "geo",
+          component: GeoView
         },
         {
           path: "network",

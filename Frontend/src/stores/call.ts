@@ -44,7 +44,12 @@ export const useCallStore = defineStore("call", {
     /* ================= SOCKET INIT ================= */
 
     initSocket(userId: string, userName: string) {
-      if (this.socket) return;
+      if (this.socket) {
+        console.log('🔄 Socket ya inicializado');
+        return;
+      }
+
+      console.log('🔌 Inicializando socket de llamadas para:', userName);
 
       this.socket = io(import.meta.env.VITE_SOCKET_URL, {
         withCredentials: true,
@@ -57,11 +62,12 @@ export const useCallStore = defineStore("call", {
       });
 
       this.socket.on("connect", () => {
-        console.log("📡 Socket conectado:", this.socket?.id);
+        console.log("✅ Socket de llamadas conectado:", this.socket?.id);
         this.socket?.emit("register", {
           userId,
           userName,
         });
+        console.log("📝 Usuario registrado en socket:", userName);
 
         // Si teníamos una llamada en progreso, intentar recuperarla
         if (this.state !== "idle" && this.activeCall) {
@@ -323,7 +329,13 @@ export const useCallStore = defineStore("call", {
 
     /* 👉 LLAMADA SALIENTE */
     async startCall(receiver: { id: string; name: string }, mode: CallMode) {
-      if (!this.socket || this.state !== "idle") {
+      if (!this.socket) {
+        console.error("❌ Socket no inicializado");
+        alert("Error: No hay conexión con el servidor. Recarga la página.");
+        return;
+      }
+      
+      if (this.state !== "idle") {
         console.warn("⚠️ No se puede iniciar llamada:", this.state);
         return;
       }
@@ -339,7 +351,15 @@ export const useCallStore = defineStore("call", {
       };
 
       const webrtc = useWebRTCStore();
-      await webrtc.init(mode);
+      
+      try {
+        await webrtc.init(mode);
+      } catch (error) {
+        console.error("❌ Error inicializando WebRTC:", error);
+        alert("Error al acceder al micrófono/cámara. Verifica los permisos.");
+        this.resetCall();
+        return;
+      }
 
       // Configurar manejador ICE
       webrtc.setIceCandidateHandler((candidate) => {

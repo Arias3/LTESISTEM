@@ -15,13 +15,21 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted } from "vue";
 import Sidebar from "../components/Sidebar.vue";
 import { useCallStore } from "../stores/call";
+import { useAuthStore } from "../stores/auth";
 
 import IncomingCallModal from "../components/Calls/IncomingCallModal.vue";
 import ActiveCall from "../components/Calls/ActiveCall.vue";
 
 const call = useCallStore();
+const auth = useAuthStore();
+
+// 🔥 Inicializar socket de llamadas cuando entramos al dashboard
+onMounted(() => {
+  auth.initCallSocket();
+});
 </script>
 
 <style scoped>

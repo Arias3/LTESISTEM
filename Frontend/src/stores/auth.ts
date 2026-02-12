@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useCallStore } from './call'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<any>(null)
@@ -24,6 +25,9 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = data.user
       token.value = data.token
       localStorage.setItem('authToken', data.token)
+      
+      // El socket se inicializará cuando entremos al dashboard
+      
       return data
     } catch (error) {
       console.error('Login error:', error)
@@ -39,6 +43,12 @@ export const useAuthStore = defineStore('auth', () => {
           'Authorization': `Bearer ${token.value}`,
         },
       })
+      
+      // 🔥 DESCONECTAR SOCKET DE LLAMADAS
+      const call = useCallStore()
+      call.disconnect()
+      console.log('📞 Socket de llamadas desconectado')
+      
       user.value = null
       token.value = null
       localStorage.removeItem('authToken')
@@ -81,6 +91,21 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.removeItem('authToken')
     }
   }
+  
+  // 🔥 Nueva función para inicializar el socket de llamadas
+  const initCallSocket = () => {
+    if (!user.value) {
+      console.warn('⚠️ No se puede inicializar socket sin usuario autenticado')
+      return
+    }
+    
+    const call = useCallStore()
+    if (!call.socket || !call.socket.connected) {
+      call.initSocket(user.value.id, user.value.username)
+    } else {
+      console.log('✅ Socket de llamadas ya conectado')
+    }
+  }
 
   // Helper function to get auth headers for API calls
   const getAuthHeaders = () => {
@@ -98,6 +123,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     logout,
     checkAuth,
+    initCallSocket,
     getAuthHeaders,
     setUser,
   }
