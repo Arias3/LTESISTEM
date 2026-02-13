@@ -39,46 +39,37 @@ const statusLabel = computed(() => {
 });
 
 /* 🎥 ENLAZAR STREAM REMOTO */
-watch(
-  () => webrtc.remoteStream,
-  (stream) => {
-    if (!stream) {
-      console.log("🔇 Stream remoto no disponible");
-      return;
-    }
+const bindRemoteStream = () => {
+  const stream = webrtc.remoteStream;
+  if (!stream) return;
 
-    console.log("🎯 Stream remoto disponible, tracks:", {
-      audio: stream.getAudioTracks().length,
-      video: stream.getVideoTracks().length,
-    });
+  const audioTracks = stream.getAudioTracks().length;
+  const videoTracks = stream.getVideoTracks().length;
 
-    // Pequeño delay para asegurar que el DOM esté listo
-    nextTick(() => {
-      if (isVideo.value && remoteVideo.value) {
+  if (audioTracks === 0 && videoTracks === 0) return;
+
+  console.log("🎯 Stream remoto con tracks:", { audio: audioTracks, video: videoTracks });
+
+  nextTick(() => {
+    if (isVideo.value && remoteVideo.value) {
+      if (remoteVideo.value.srcObject !== stream) {
         console.log("🎬 Configurando video remoto");
         remoteVideo.value.srcObject = stream;
-        remoteVideo.value.muted = false;
-        remoteVideo.value.play().catch((error) => {
-          console.warn("❌ Error reproduciendo video remoto:", error);
-          // Intentar de nuevo
-          setTimeout(() => remoteVideo.value?.play().catch(() => {}), 500);
-        });
+        remoteVideo.value.play().catch(() => {});
       }
+    }
 
-      if (!isVideo.value && remoteAudio.value) {
+    if (!isVideo.value && remoteAudio.value) {
+      if (remoteAudio.value.srcObject !== stream) {
         console.log("🔊 Configurando audio remoto");
         remoteAudio.value.srcObject = stream;
-        remoteAudio.value.muted = false;
-        remoteAudio.value.play().catch((error) => {
-          console.warn("❌ Error reproduciendo audio remoto:", error);
-          // Intentar de nuevo
-          setTimeout(() => remoteAudio.value?.play().catch(() => {}), 500);
-        });
+        remoteAudio.value.play().catch(() => {});
       }
-    });
-  },
-  { immediate: true }
-);
+    }
+  });
+};
+
+watch(() => webrtc.remoteStream, bindRemoteStream, { immediate: true });
 
 /* 🎥 ENLAZAR STREAM LOCAL */
 watch(
@@ -122,15 +113,11 @@ onMounted(() => {
     pcIceState: webrtc.pc?.iceConnectionState,
   });
 
-  // Verificar estado de conexión cada 2 segundos
+  // Verificar estado de conexión y enlazar stream cada 2 segundos
   connectionCheckInterval = window.setInterval(() => {
     if (call.state === "in-call" && webrtc.pc) {
-      console.log("📊 Estado conexión:", {
-        connectionState: webrtc.pc.connectionState,
-        iceConnectionState: webrtc.pc.iceConnectionState,
-        iceGatheringState: webrtc.pc.iceGatheringState,
-        signalingState: webrtc.pc.signalingState,
-      });
+      // Intentar enlazar stream remoto si hay tracks disponibles
+      bindRemoteStream();
     }
   }, 2000);
 });
@@ -376,9 +363,9 @@ const switchCamera = async () => {
 
           <!-- ELEMENTO AUDIO OCULTO (¡IMPORTANTE!) -->
           <audio
-            v-if="webrtc.remoteStream"
             ref="remoteAudio"
             autoplay
+            playsinline
             class="hidden-audio"
           />
         </div>

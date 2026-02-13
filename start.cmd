@@ -49,21 +49,21 @@ echo    Certificados OK para %LOCAL_IP%
 :: ---- Actualizar .env del Frontend ----
 echo [3/4] Configurando URLs...
 (
-    echo VITE_API_URL=https://%LOCAL_IP%:4000
-    echo VITE_SOCKET_URL=https://%LOCAL_IP%:4000
+    echo VITE_API_URL=https://%LOCAL_IP%:5000
+    echo VITE_SOCKET_URL=https://%LOCAL_IP%:5000
 ) > "%FRONTEND_DIR%\.env"
-echo    API: https://%LOCAL_IP%:4000
+echo    API: https://%LOCAL_IP%:5000
 
 :: ---- Arrancar servidores ----
 echo [4/4] Arrancando servidores...
 echo.
 echo ============================================
-echo   Backend:  https://%LOCAL_IP%:4000
-echo   Frontend: https://%LOCAL_IP%:5173
+echo   Backend:  https://%LOCAL_IP%:5000
+echo   Frontend: https://%LOCAL_IP%:4000
 echo ============================================
 echo.
 echo   Desde moviles en la misma red WiFi:
-echo   https://%LOCAL_IP%:5173
+echo   https://%LOCAL_IP%:4000
 echo.
 echo   Cierra esta ventana para detener todo.
 echo ============================================

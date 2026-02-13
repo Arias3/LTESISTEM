@@ -74,14 +74,21 @@ export const useWebRTCStore = defineStore("webrtc", {
         });
 
         /* 📥 REMOTE STREAM */
-        this.remoteStream = new MediaStream();
-
         pc.ontrack = (event) => {
           console.log("📥 Track remoto recibido:", event.track.kind);
+          // Crear un nuevo MediaStream con todos los tracks para que Pinia detecte el cambio
+          const newStream = new MediaStream();
+          // Agregar tracks existentes
+          this.remoteStream?.getTracks().forEach((t) => newStream.addTrack(t));
+          // Agregar nuevos tracks
           event.streams[0]?.getTracks().forEach((track) => {
-            console.log("➕ Añadiendo track remoto:", track.kind, track.id);
-            this.remoteStream?.addTrack(track);
+            if (!newStream.getTrackById(track.id)) {
+              console.log("➕ Añadiendo track remoto:", track.kind, track.id);
+              newStream.addTrack(track);
+            }
           });
+          // Reasignar para que Pinia detecte el cambio de referencia
+          this.remoteStream = newStream;
         };
 
         /* ❄ ICE - CON LOGS DETALLADOS */

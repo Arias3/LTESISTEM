@@ -30,8 +30,9 @@ export const useCallStore = defineStore("call", {
     callTimeout: null as ReturnType<typeof setTimeout> | null,
     isProcessingCall: false,
     isCaller: false,
-    // AÑADIR: Para saber si estamos esperando offer
     waitingForOffer: false,
+    // Buffer para ICE candidates que llegan antes de tener PeerConnection
+    pendingIceCandidates: [] as RTCIceCandidateInit[],
   }),
 
   getters: {
@@ -189,6 +190,15 @@ export const useCallStore = defineStore("call", {
               answer: pc.localDescription,
             });
 
+            // Aplicar ICE candidates bufferizados
+            if (this.pendingIceCandidates.length > 0) {
+              console.log("❄ Aplicando", this.pendingIceCandidates.length, "ICE candidates bufferizados");
+              for (const c of this.pendingIceCandidates) {
+                pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+              }
+              this.pendingIceCandidates = [];
+            }
+
             console.log("🎉 Conexión WebRTC establecida como receptor");
           } catch (error) {
             console.error("❌ Error procesando offer:", error);
@@ -255,6 +265,15 @@ export const useCallStore = defineStore("call", {
               new RTCSessionDescription(answer)
             );
 
+            // Aplicar ICE candidates bufferizados
+            if (this.pendingIceCandidates.length > 0) {
+              console.log("❄ Aplicando", this.pendingIceCandidates.length, "ICE candidates bufferizados");
+              for (const c of this.pendingIceCandidates) {
+                webrtc.pc!.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+              }
+              this.pendingIceCandidates = [];
+            }
+
             // 🔥 IMPORTANTE: Cambiar estado SOLO después de establecer conexión
             this.state = "in-call";
             this.isCaller = true;
@@ -314,8 +333,16 @@ export const useCallStore = defineStore("call", {
 
       /* ❄ ICE CANDIDATE */
       this.socket.on("call:ice-candidate", ({ candidate }) => {
+        if (!candidate) return;
+
         const webrtc = useWebRTCStore();
-        if (!candidate || !webrtc.pc) return;
+
+        // Si no hay PeerConnection aún, guardar para después
+        if (!webrtc.pc || !webrtc.pc.remoteDescription) {
+          console.log("❄ ICE candidate bufferizado (PC no listo)");
+          this.pendingIceCandidates.push(candidate);
+          return;
+        }
 
         webrtc.pc
           .addIceCandidate(new RTCIceCandidate(candidate))
@@ -511,6 +538,7 @@ export const useCallStore = defineStore("call", {
       this.isProcessingCall = false;
       this.isCaller = false;
       this.waitingForOffer = false;
+      this.pendingIceCandidates = [];
     },
 
     disconnect() {

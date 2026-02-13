@@ -1,9 +1,14 @@
 import express from "express";
 import dotenv from "dotenv";
+import https from "https";
 import http from "http";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 import cors from "cors";
 import routes from "./routes.js";
+import initCallGateway from "./modules/call/call.gateway.js";
 
 /* ================= ENV ================= */
 dotenv.config();
@@ -11,9 +16,27 @@ dotenv.config();
 /* ================= APP ================= */
 const app = express();
 
+/* ================= SSL ================= */
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const certsDir = path.join(__dirname, "..", "..", "certs");
+const certFile = path.join(certsDir, "cert.pem");
+const keyFile = path.join(certsDir, "key.pem");
+const useSSL = fs.existsSync(certFile) && fs.existsSync(keyFile);
+
+let sslOptions = {};
+if (useSSL) {
+  sslOptions = {
+    cert: fs.readFileSync(certFile),
+    key: fs.readFileSync(keyFile),
+  };
+  console.log("SSL activado - usando HTTPS");
+} else {
+  console.log("SSL no encontrado - usando HTTP");
+}
+
 /* ================= CORS ================= */
 app.use(cors({
-  origin: true, // Allow all origins for development
+  origin: true,
   credentials: true
 }));
 
@@ -28,23 +51,20 @@ app.get("/", (req, res) => {
   res.send("Backend API funcionando 🚀");
 });
 
-/* ================= HTTP SERVER ================= */
-const server = http.createServer(app);
+/* ================= SERVER (HTTPS o HTTP) ================= */
+const server = useSSL
+  ? https.createServer(sslOptions, app)
+  : http.createServer(app);
 
 /* ================= SOCKET.IO ================= */
-const frontendOrigins = process.env.FRONTEND_ORIGINS
-  ? process.env.FRONTEND_ORIGINS.split(',').map(origin => origin.trim())
-  : ["http://192.168.1.100:4000", "http://10.45.0.1:4000"];
-
 const io = new Server(server, {
   cors: {
-    origin: frontendOrigins,
+    origin: true,
     credentials: true
   }
 });
 
 /* ================= CALL GATEWAY ================= */
-import initCallGateway from "./modules/call/call.gateway.js";
 initCallGateway(io);
 
 export { app, server };

@@ -1,11 +1,24 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { VitePWA } from "vite-plugin-pwa";
+import fs from "fs";
+import path from "path";
+
+const certsDir = path.resolve(__dirname, "..", "certs");
+const certFile = path.join(certsDir, "cert.pem");
+const keyFile = path.join(certsDir, "key.pem");
+const useSSL = fs.existsSync(certFile) && fs.existsSync(keyFile);
 
 export default defineConfig({
   server: {
-    host: '0.0.0.0', // Permite acceso tanto local como desde la red
+    host: "0.0.0.0",
     port: 4000,
+    ...(useSSL && {
+      https: {
+        cert: fs.readFileSync(certFile),
+        key: fs.readFileSync(keyFile),
+      },
+    }),
   },
   plugins: [
     vue(),
