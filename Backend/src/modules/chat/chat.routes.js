@@ -1,20 +1,14 @@
 import { Router } from "express";
 import { chatService } from "./chat.service.js";
 import { prisma } from "../../config/prisma.js";
+import { requireAuth } from "../../middleware/authJWT.js";
 
 const router = Router();
-
-function requireAuth(req, res, next) {
-  if (!req.session?.user) {
-    return res.status(401).json({ error: "No autenticado" });
-  }
-  next();
-}
 
 /* ================= SEND ================= */
 router.post("/send", requireAuth, async (req, res) => {
   const { receiverId, content } = req.body;
-  const senderId = req.session.user.id;
+  const senderId = req.user.id;
 
   try {
     const msg = await chatService.sendMessage(senderId, receiverId, content);
@@ -28,7 +22,7 @@ router.post("/send", requireAuth, async (req, res) => {
 /* ================= CONVERSATIONS LIST ================= */
 router.get("/conversations", requireAuth, async (req, res) => {
   try {
-    const userId = req.session.user.id;
+    const userId = req.user.id;
     const conversations = await chatService.getConversations(userId);
     res.json(conversations);
   } catch (err) {
@@ -39,7 +33,7 @@ router.get("/conversations", requireAuth, async (req, res) => {
 /* ================= SINGLE CONVERSATION ================= */
 router.get("/conversation/:otherUserId", requireAuth, async (req, res) => {
   try {
-    const userId = req.session.user.id;
+    const userId = req.user.id;
     const { otherUserId } = req.params;
     const { after } = req.query;
 

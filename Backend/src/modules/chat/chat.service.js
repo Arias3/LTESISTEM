@@ -36,10 +36,12 @@ class ChatService {
           },
         });
 
-        map.set(otherUserId, {
-          user,
-          lastMessage: msg,
-        });
+        if (user) {
+          map.set(otherUserId, {
+            user,
+            lastMessage: msg,
+          });
+        }
       }
     }
 

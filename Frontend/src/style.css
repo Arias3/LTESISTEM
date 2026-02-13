@@ -17,34 +17,28 @@ body {
 
 @font-face {
   font-family: "Zen";
-  src: url("./fonts/zen.ttf") format("truetype");
+  src: url("./assets/fonts/zen.ttf") format("opentype");
   font-weight: normal;
   font-style: normal;
 }
+
 @font-face {
   font-family: 'Inter';
-  src: url('@/assets/fonts/inter/Inter-VariableFont_opsz,wght.ttf') format('truetype');
+  src: url('./assets/fonts/Inter/Inter-VariableFont_opsz,wght.ttf') format('truetype');
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
 
-@font-face {
-  font-family: 'Inter';
-  src: url('@/assets/fonts/inter/Inter-Italic-VariableFont_opsz,wght.ttf') format('truetype');
-  font-weight: 100 900;
-  font-style: italic;
-  font-display: swap;
-}
-
-h1, h2, h3, h4, h5 {
+/* Títulos usan Zen */
+h1, h2, h3, h4, h5, h6 {
   font-family: "Zen", sans-serif;
 }
 
+/* Cuerpo usa Inter */
 html, body {
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  background: #0b1220;
-  color: #e5e7eb;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #f5f7fa;
+  color: #1f2937;
 }
 

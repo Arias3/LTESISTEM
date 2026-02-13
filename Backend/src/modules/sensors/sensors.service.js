@@ -1,7 +1,5 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../../config/prisma.js";
 import axios from "axios";
-
-const prisma = new PrismaClient();
 
 export const SensorsService = {
   //////////////////////////////////////////////////

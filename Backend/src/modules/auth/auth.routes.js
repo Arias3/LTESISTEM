@@ -1,7 +1,52 @@
 import { Router } from "express";
 import * as AuthService from "./auth.service.js";
+import { requireAuth } from "../../middleware/authJWT.js";
 
 const router = Router();
+
+/* ======================
+   RUTAS ESPECÍFICAS
+====================== */
+
+// LOGIN
+router.post("/login", async (req, res) => {
+  try {
+    const result = await AuthService.loginBasic(req.body);
+    res.json({ msg: "Login exitoso", user: result.user, token: result.token });
+  } catch (err) {
+    console.error("Error en login:", err.message);
+    res.status(401).json({ error: err.message });
+  }
+});
+
+// ME
+router.get("/me", requireAuth, (req, res) => {
+  console.log("req.user:", req.user);
+  console.log("typeof req.user:", typeof req.user);
+
+  if (!req.user) {
+    return res.status(401).json({ error: "Usuario no válido" });
+  }
+
+  res.json(req.user);
+});
+
+// LOGOUT
+router.post("/logout", (req, res) => {
+  // For JWT, logout is handled client-side by removing token
+  res.json({ msg: "Logout exitoso" });
+});
+
+// REFRESH TOKEN (optional, for token renewal)
+router.post("/refresh", (req, res) => {
+  // This would require refresh tokens, for now just return success
+  // In a full implementation, verify refresh token and issue new access token
+  res.json({ msg: "Token refresh not implemented yet" });
+});
+
+/* ======================
+   CRUD
+====================== */
 
 // Obtener todos los usuarios
 router.get("/", async (req, res) => {
@@ -13,17 +58,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/me", (req, res) => {
-  if (!req.session?.user) {
-    return res.status(401).json({ error: "No autenticado" });
-  }
-  console.log("Session en /me:", req.session);
-  console.log("Cookie enviada:", req.headers.cookie);
-
-  res.json(req.session.user);
-});
-
-// Obtener usuario por ID
+// Obtener usuario por ID (⚠️ SIEMPRE AL FINAL)
 router.get("/:id", async (req, res) => {
   try {
     const user = await AuthService.getUserById(req.params.id);
@@ -63,35 +98,6 @@ router.delete("/:id", async (req, res) => {
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
-});
-
-router.post("/login", async (req, res) => {
-  try {
-    const user = await AuthService.loginBasic(req.body);
-
-    req.session.user = user;
-
-    req.session.save((err) => {
-      if (err)
-        return res.status(500).json({ error: "No se pudo guardar sesión" });
-      res.json({ msg: "Login exitoso", user });
-    });
-  } catch (err) {
-    console.error("Error en login:", err.message); // Log claro para backend
-    res.status(401).json({
-      error: err.message,
-    });
-  }
-});
-
-router.post("/logout", (req, res) => {
-  if (!req.session) {
-    return res.status(400).json({ msg: "No hay sesión activa" });
-  }
-
-  req.session.destroy(() => {
-    res.json({ msg: "Sesión cerrada correctamente" });
-  });
 });
 
 export default router;

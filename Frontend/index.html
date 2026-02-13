@@ -3,11 +3,35 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0b1220" />
+    <meta name="msapplication-navbutton-color" content="#0b1220" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+      html, body {
+        height: 100vh;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      #app {
+        height: 100vh;
+        overflow: hidden;
+      }
+    </style>
     <title>Platform</title>
   </head>
   <body>
     <div id="app"></div>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

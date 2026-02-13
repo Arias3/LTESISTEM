@@ -50,17 +50,16 @@ import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 
-const API_URL = import.meta.env.VITE_API_URL;
-
 const auth = useAuthStore();
 const router = useRouter();
+
 const loginError = ref("");
 const username = ref("");
 const password = ref("");
 
 // solo letras minúsculas
 const handleUsername = () => {
-  username.value = username.value.toLowerCase().replace(/[^a-z]/g, ""); // elimina números y raros
+  username.value = username.value.toLowerCase().replace(/[^a-z]/g, "");
 };
 
 const usernameError = computed(() => {
@@ -86,39 +85,22 @@ const pressIngresar = async () => {
   if (!isValid.value) return;
 
   try {
-    const res = await fetch(`${API_URL}/api/auth/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify({
-        username: username.value,
-        password: password.value,
-      }),
+    await auth.login({
+      username: username.value,
+      password: password.value,
     });
 
-    const data = await res.json();
-
-    if (!res.ok) {
-      loginError.value = data.error || "Error al iniciar sesión";
-      return;
-    }
-
-    // Guarda usuario en el store
-    auth.setUser(data.user);
-
-    // Redirigir
     setTimeout(() => {
       router.push("/dashboard");
     }, 300);
 
-  } catch (err: any) {
+  } catch (err) {
     console.error(err);
-    loginError.value = "No se pudo conectar al servidor";
+    loginError.value = "Credenciales incorrectas o error de conexión";
   }
 };
 </script>
+
 
 <style scoped>
 /* (MISMO CSS DEL LOGIN ANTERIOR, NO LO CAMBIÉ) */
@@ -133,7 +115,7 @@ const pressIngresar = async () => {
   justify-content: center;
   align-items: center;
 
-  font-family: sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
 }
 
 .error {

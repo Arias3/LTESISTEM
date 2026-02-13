@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { useCallStore } from "../stores/call";
 import PhoneIcon from "../components/icons/PhoneIcon.vue";
@@ -46,6 +46,9 @@ const messages = ref<Message[]>([]);
 const loadingMessages = ref(false);
 const newMessage = ref("");
 const sending = ref(false);
+const isKeyboardVisible = ref(false);
+const keyboardHeight = ref(0);
+const isMobile = ref(false);
 
 /* ================= COMPUTED ================= */
 
@@ -59,8 +62,21 @@ const filteredContacts = computed(() => {
   return contacts.value.filter(
     (u) =>
       u.name.toLowerCase().includes(term) ||
-      u.username.toLowerCase().includes(term)
+      u.username.toLowerCase().includes(term),
   );
+});
+
+const chatBodyStyle = computed(() => {
+  if (!isMobile.value) return {};
+
+  const headerHeight = 60; // approx header height
+  const inputHeight = 60; // approx input height
+  const totalSubtract = headerHeight + inputHeight + (isKeyboardVisible.value ? keyboardHeight.value : 0);
+
+  return {
+    height: `calc(100vh - ${totalSubtract}px)`,
+    paddingTop: `${headerHeight}px`,
+  };
 });
 
 /* ================= LOAD DATA ================= */
@@ -68,16 +84,22 @@ const filteredContacts = computed(() => {
 async function loadContacts() {
   const res = await fetch(`${API_URL}/api/auth`, {
     credentials: "include",
+    headers: auth.getAuthHeaders() as Record<string, string>,
   });
-  const users: User[] = await res.json();
-  contacts.value = users.filter((u) => u.id !== auth.user.id);
+  if (res.ok) {
+    const users: User[] = await res.json();
+    contacts.value = users.filter((u) => u.id !== auth.user.id);
+  }
 }
 
 async function loadConversations() {
   const res = await fetch(`${API_URL}/api/chat/conversations`, {
     credentials: "include",
+    headers: auth.getAuthHeaders() as Record<string, string>,
   });
-  conversations.value = await res.json();
+  if (res.ok) {
+    conversations.value = await res.json();
+  }
 }
 
 onMounted(async () => {
@@ -94,7 +116,10 @@ async function sendMessage() {
     const res = await fetch(`${API_URL}/api/chat/send`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...auth.getAuthHeaders(),
+      } as Record<string, string>,
       body: JSON.stringify({
         receiverId: selectedContact.value.id,
         content: newMessage.value,
@@ -139,7 +164,6 @@ function formatMessageTime(dateStr: string) {
       .padStart(2, "0")}/${date.getFullYear()}`;
   }
 }
-import { onUnmounted } from "vue";
 /* ================= POLLING ================= */
 let pollingTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -155,7 +179,8 @@ async function loadNewMessages() {
     `${API_URL}/api/chat/conversation/${selectedContact.value.id}${query}`,
     {
       credentials: "include",
-    }
+      headers: auth.getAuthHeaders() as Record<string, string>,
+    },
   );
 
   if (res.ok) {
@@ -172,7 +197,7 @@ async function loadNewMessages() {
         // actualizar conversación
         const last = onlyNew[onlyNew.length - 1];
         const conv = conversations.value.find(
-          (c) => c.user.id === selectedContact.value?.id
+          (c) => c.user.id === selectedContact.value?.id,
         );
         if (conv && last) {
           conv.lastMessage = last;
@@ -200,6 +225,14 @@ async function openChat(user: User) {
 
   // Iniciar nuevo polling cada 3 segundos
   pollingTimer = setInterval(loadNewMessages, 3000);
+
+  // Agregar listeners del teclado
+  addKeyboardListeners();
+
+  // Scroll al final después de cargar mensajes
+  nextTick(() => {
+    scrollToBottom();
+  });
 }
 
 // Cerrar chat y detener polling
@@ -210,6 +243,9 @@ function closeChat() {
     clearInterval(pollingTimer);
     pollingTimer = null;
   }
+
+  // Remover listeners del teclado
+  removeKeyboardListeners();
 }
 
 function switchChat(user: User) {
@@ -227,7 +263,66 @@ onUnmounted(() => {
     clearInterval(pollingTimer);
     pollingTimer = null;
   }
+  removeKeyboardListeners();
 });
+
+// ================= KEYBOARD HANDLING ================= */
+function addKeyboardListeners() {
+  if (typeof window === "undefined") return;
+
+  const viewport = window.visualViewport;
+
+  if (viewport) {
+    viewport.addEventListener("resize", handleVisualViewportResize);
+  } else {
+    window.addEventListener("resize", handleWindowResize);
+  }
+}
+
+function removeKeyboardListeners() {
+  if (typeof window === "undefined") return;
+
+  const viewport = window.visualViewport;
+
+  if (viewport) {
+    viewport.removeEventListener("resize", handleVisualViewportResize);
+  } else {
+    window.removeEventListener("resize", handleWindowResize);
+  }
+}
+
+function handleVisualViewportResize() {
+  if (!window.visualViewport) return;
+
+  const viewport = window.visualViewport;
+  const heightDiff = window.innerHeight - viewport.height;
+
+  if (heightDiff > 150) {
+    // Teclado visible
+    isKeyboardVisible.value = true;
+    keyboardHeight.value = heightDiff;
+    scrollToBottom();
+  } else {
+    isKeyboardVisible.value = false;
+    keyboardHeight.value = 0;
+  }
+}
+
+function handleWindowResize() {
+  // Fallback simple
+  setTimeout(() => {
+    scrollToBottom();
+  }, 300);
+}
+
+function scrollToBottom() {
+  nextTick(() => {
+    const chatBody = document.querySelector(".chat-body") as HTMLElement;
+    if (chatBody) {
+      chatBody.scrollTop = chatBody.scrollHeight;
+    }
+  });
+}
 
 // ================= CALLS ================= */
 const call = useCallStore();
@@ -243,7 +338,7 @@ const startAudioCall = () => {
       id: selectedContact.value.id,
       name: selectedContact.value.name,
     },
-    "audio"
+    "audio",
   );
 };
 
@@ -255,7 +350,7 @@ const startVideoCall = () => {
       id: selectedContact.value.id,
       name: selectedContact.value.name,
     },
-    "video"
+    "video",
   );
 };
 </script>
@@ -278,10 +373,16 @@ const startVideoCall = () => {
           <div class="avatar"></div>
           <div class="chat-info">
             <div class="chat-name">{{ conv.user.name }}</div>
-            <div class="chat-last">{{ conv.lastMessage.content }}</div>
+            <div class="chat-last">
+              {{ conv.lastMessage?.content || "No messages yet" }}
+            </div>
           </div>
           <div class="chat-time">
-            {{ formatMessageTime(conv.lastMessage.createdAt) }}
+            {{
+              conv.lastMessage
+                ? formatMessageTime(conv.lastMessage.createdAt)
+                : ""
+            }}
           </div>
         </div>
       </div>
@@ -346,7 +447,7 @@ const startVideoCall = () => {
           </button>
         </div>
       </header>
-      <div class="chat-body">
+      <div class="chat-body" :style="chatBodyStyle">
         <div v-if="loadingMessages">Cargando mensajes…</div>
 
         <div v-else-if="messages.length === 0" class="chat-empty">
@@ -388,8 +489,8 @@ const startVideoCall = () => {
 .chat-layout {
   display: flex;
   height: 100vh;
-  background: #0b1220;
-  color: #e5e7eb;
+  background: #f5f7fa;
+  color: #1f2937;
   font-family: "Inter", system-ui, sans-serif;
   overflow: hidden;
 }
@@ -398,8 +499,8 @@ const startVideoCall = () => {
 
 .chat-list {
   width: 30%;
-  background: #020617;
-  border-right: 1px solid #1e293b;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
   transition: transform 0.3s ease;
@@ -409,14 +510,14 @@ const startVideoCall = () => {
   padding: 12px 14px;
   margin: 12px;
   border-radius: 12px;
-  border: 1px solid #2c4773;
-  background: #020617;
-  color: #e5e7eb;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #1f2937;
   font-size: 14px;
 }
 
 .search::placeholder {
-  color: #6282ae;
+  color: #9ca3af;
 }
 
 .chat-item {
@@ -429,18 +530,18 @@ const startVideoCall = () => {
 }
 
 .chat-item:hover {
-  background: #020617;
+  background: #f3f4f6;
 }
 
 .chat-item.active {
-  background: #020617;
-  border-left: 3px solid #2563eb;
+  background: #eff6ff;
+  border-left: 3px solid #2d5088;
 }
 
 .avatar {
   width: 42px;
   height: 42px;
-  background: #334155;
+  background: linear-gradient(135deg, #5ba3d0, #2d5088);
   border-radius: 50%;
   margin-right: 12px;
   flex-shrink: 0;
@@ -464,7 +565,7 @@ const startVideoCall = () => {
 
 .chat-last {
   font-size: 12px;
-  color: #94a3b8;
+  color: #6b7280;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -472,7 +573,7 @@ const startVideoCall = () => {
 
 .chat-time {
   font-size: 11px;
-  color: #64748b;
+  color: #9ca3af;
   margin-left: 8px;
   flex-shrink: 0;
   white-space: nowrap;
@@ -484,17 +585,17 @@ const startVideoCall = () => {
   width: 70%;
   display: flex;
   flex-direction: column;
-  background: #333c66;
+  background: #f9fafb;
   transition: transform 0.3s ease;
 }
 
 .chat-header {
   padding: 14px 16px;
-  border-bottom: 1px solid #0c192f;
-  background-color: #0b1220;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #ffffff;
   display: flex;
   align-items: center;
-  box-shadow: 0 2px 40px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .chat-header .back-btn {
@@ -502,12 +603,12 @@ const startVideoCall = () => {
   margin-right: 12px;
   background: none;
   border: none;
-  color: #cbd5f5;
+  color: #2d5088;
   font-size: 16px;
   cursor: pointer;
 }
 .chat-header .call-btn {
-  color: #fcfcfc;
+  color: #2d5088;
   margin-left: auto;
   background: none;
   border: none;
@@ -518,11 +619,12 @@ const startVideoCall = () => {
 .chat-title {
   font-weight: 600;
   font-size: 15px;
+  color: #1f2937;
 }
 
 .chat-status {
   font-size: 12px;
-  color: #94a3b8;
+  color: #6b7280;
 }
 
 /* ================= BODY ================= */
@@ -540,14 +642,15 @@ const startVideoCall = () => {
   padding: 10px 14px;
   border-radius: 14px;
   margin-bottom: 10px;
-  background: #2547e2;
+  background: #2d5088;
+  color: #ffffff;
   font-size: 14px;
   line-height: 1.45;
-  box-shadow: #232533 0px 2px 5px 0px, #0c1748 0px 1px 2px 0px;
+  box-shadow: 0 2px 5px rgba(45, 80, 136, 0.2);
 }
 
 .message.me {
-  background: #22325f;
+  background: #5ba3d0;
   margin-left: auto;
 }
 
@@ -555,7 +658,7 @@ const startVideoCall = () => {
   display: block;
   font-size: 10px;
   margin-top: 4px;
-  color: #cbd5f5;
+  color: rgba(255, 255, 255, 0.8);
   text-align: right;
 }
 
@@ -564,30 +667,30 @@ const startVideoCall = () => {
 .chat-input {
   display: flex;
   padding: 12px;
-  border-top: 1px solid #1b2027;
-  background: #020617;
-  box-shadow: #232533 0px 2px 5px 0px, #0c1748 0px 1px 2px 0px;
+  border-top: 1px solid #e5e7eb;
+  background: #ffffff;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
 }
 
 .chat-input input {
   flex: 1;
   padding: 10px 14px;
   border-radius: 12px;
-  border: 1px solid #bec3cc;
-  background: #090e249f;
-  color: #e5e7eb;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #1f2937;
   font-size: 14px;
 }
 
 .chat-input input::placeholder {
-  color: #9aa2ad;
+  color: #9ca3af;
 }
 
 .chat-input button {
   margin-left: 10px;
   padding: 0 18px;
   border-radius: 12px;
-  background: #2563eb;
+  background: #2d5088;
   color: white;
   border: none;
   font-weight: 500;
@@ -596,7 +699,7 @@ const startVideoCall = () => {
 }
 
 .chat-input button:hover {
-  background: #1e40af;
+  background: #1e3a5f;
 }
 
 /* ================= EMPTY ================= */
@@ -606,7 +709,7 @@ const startVideoCall = () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  color: #64748b;
+  color: #9ca3af;
   font-size: 14px;
 }
 .call-actions {
@@ -619,8 +722,8 @@ const startVideoCall = () => {
   height: 42px;
   border-radius: 50%;
   border: none;
-  background: #1e293b;
-  color: white;
+  background: #eff6ff;
+  color: #2d5088;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -629,7 +732,7 @@ const startVideoCall = () => {
 }
 
 .call-btn:hover {
-  background: #334155;
+  background: #dbeafe;
 }
 
 .call-btn.disabled {
@@ -639,7 +742,8 @@ const startVideoCall = () => {
 
 .call-btn.calling {
   animation: pulse 1.2s infinite;
-  background: #2563eb;
+  background: #2d5088;
+  color: white;
 }
 
 @keyframes pulse {
@@ -667,7 +771,7 @@ const startVideoCall = () => {
     position: absolute;
     z-index: 10;
     transform: translateX(0);
-    background: #020617;
+    background: #ffffff;
   }
 
   .chat-list.hide {
@@ -692,12 +796,28 @@ const startVideoCall = () => {
     display: inline-block;
   }
 
+  .chat-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 30;
+  }
+
   .chat-body {
     padding: 12px;
   }
 
   .chat-input {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
     padding: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    background: #ffffff;
+    z-index: 1000;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
   }
 
   .message {

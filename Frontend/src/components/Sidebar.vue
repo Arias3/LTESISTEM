@@ -9,7 +9,7 @@ import { useNotificationsStore } from "../stores/notifications";
 import BellIcon from "../components/icons/BellIcon.vue";
 import StatsIcon from "../components/icons/StatsIcon.vue";
 import MessagesIcon from "../components/icons/MessagesIcon.vue";
-import UserIcon from "../components/icons/UserIcon.vue";
+import MapIcon from "../components/icons/MapIcon.vue";
 import NetworkIcon from "../components/icons/NetworkIcon.vue";
 import LogoutIcon from "../components/icons/LogoutIcon.vue";
 
@@ -40,7 +40,7 @@ const logout = async () => {
 const menuItems: MenuItem[] = [
   { name: "Estadísticas", route: "/dashboard/stats", icon: StatsIcon },
   { name: "Mensajes", route: "/dashboard/messages", icon: MessagesIcon },
-  { name: "Personal", route: "/dashboard/personal", icon: UserIcon },
+  { name: "Ubicación", route: "/dashboard/geo", icon: MapIcon },
   { name: "Red", route: "/dashboard/network", icon: NetworkIcon }
 ];
 
@@ -119,10 +119,15 @@ const isActive = (routePath: string) => {
 }
 
 /* SECTIONS */
-.sidebar-top,
+.sidebar-top {
+  display: flex;
+  justify-content: center;
+}
+
 .sidebar-bottom {
   display: flex;
   justify-content: center;
+  margin-top: 16px;
 }
 
 .sidebar-center {

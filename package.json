@@ -1,0 +1,11 @@
+{
+  "name": "ltesistem",
+  "version": "1.0.0",
+  "description": "LTE System with JWT authentication",
+  "scripts": {
+    "dev": "concurrently \"cd Backend/src && node server.js\" \"cd Frontend && npm run dev --host\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

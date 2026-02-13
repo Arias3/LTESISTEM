@@ -43,6 +43,8 @@ model User {
 
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
+  
+  geoLocation GeoUser? @relation("GeoUserAccount")
 
   createdAt DateTime @default(now())
 }
@@ -87,4 +89,41 @@ model Message {
   @@index([senderId])
   @@index([receiverId])
   @@index([createdAt])
+}
+
+//////////////////////////////////////////////////
+// GEO TRACKING MODULE
+//////////////////////////////////////////////////
+
+model GeoUser {
+  id         String   @id @default(uuid())
+  accountId  String   @unique @map("account_id")
+  latitude   Decimal  @db.Decimal(10, 8)
+  longitude  Decimal  @db.Decimal(11, 8)
+  online     Boolean  @default(true)
+  lastUpdate DateTime @default(now()) @map("last_update")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  account User @relation("GeoUserAccount", fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([online])
+  @@index([lastUpdate])
+  @@map("geo_users")
+}
+
+model GeoDevice {
+  id         String   @id @default(uuid())
+  name       String   @db.VarChar(255)
+  type       String   @db.VarChar(50)
+  latitude   Decimal  @db.Decimal(10, 8)
+  longitude  Decimal  @db.Decimal(11, 8)
+  online     Boolean  @default(true)
+  sensorData Json?    @map("sensor_data")
+  lastUpdate DateTime @default(now()) @map("last_update")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([type])
+  @@index([online])
+  @@index([lastUpdate])
+  @@map("geo_devices")
 }
