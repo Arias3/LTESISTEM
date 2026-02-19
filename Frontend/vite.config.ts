@@ -1,12 +1,33 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { VitePWA } from "vite-plugin-pwa";
+import fs from "fs";
+import path from "path";
+
+// ── Certificados SSL ─────────────────────────────────────────
+// Los archivos los genera generate-ssl.sh en la raíz del proyecto.
+const ROOT = path.resolve(__dirname, "..");
+const SSL_CERT = path.join(ROOT, "ssl", "ltesistem.crt");
+const SSL_KEY = path.join(ROOT, "ssl", "ltesistem.key");
+
+const httpsConfig =
+  fs.existsSync(SSL_CERT) && fs.existsSync(SSL_KEY)
+    ? { cert: fs.readFileSync(SSL_CERT), key: fs.readFileSync(SSL_KEY) }
+    : undefined; // fallback HTTP si aún no se generaron los certs
+
+if (httpsConfig) {
+  console.log("🔐  Vite: HTTPS activado con certificado SSL local");
+} else {
+  console.warn("⚠️   Vite: certificados no encontrados → corriendo en HTTP");
+}
 
 export default defineConfig({
   server: {
-    host: '0.0.0.0', // Permite acceso tanto local como desde la red
+    host: "192.168.1.100", // interfaz eno1 — fija el servidor a esa IP
     port: 4000,
+    https: httpsConfig,
   },
+
   plugins: [
     vue(),
     VitePWA({

@@ -21,6 +21,11 @@ set -a
 source <(grep -v '^\s*#' "$ENV_FILE" | grep -v '^\s*$')
 set +a
 
+# ── Git Bash en Windows convierte strings como /C=CO/ST=...
+#    como si fueran rutas de archivo.  Estas dos variables lo desactivan.
+export MSYS_NO_PATHCONV=1
+export MSYS2_ARG_CONV_EXCL="*"
+
 # ── 2. Detectar IP de la interfaz de salida (si SSL_IP=auto) ─
 detect_outbound_ip() {
   local probe="${SSL_PROBE_HOST:-8.8.8.8}"
