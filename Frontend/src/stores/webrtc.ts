@@ -10,6 +10,9 @@ export const useWebRTCStore = defineStore("webrtc", {
 
     // callback que el call store registrará
     onIceCandidate: null as ((candidate: RTCIceCandidate) => void) | null,
+
+    // Buffer para ICE candidates que llegan antes de que remoteDescription esté listo
+    pendingIceCandidates: [] as RTCIceCandidateInit[],
   }),
 
   actions: {
@@ -29,10 +32,10 @@ export const useWebRTCStore = defineStore("webrtc", {
           video:
             mode === "video"
               ? {
-                  width: { ideal: 1280 },
-                  height: { ideal: 720 },
-                  facingMode: "user",
-                }
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                facingMode: "user",
+              }
               : false,
         };
 
@@ -74,14 +77,23 @@ export const useWebRTCStore = defineStore("webrtc", {
         });
 
         /* 📥 REMOTE STREAM */
-        this.remoteStream = new MediaStream();
+        // No crear stream vacío aquí: se asigna en ontrack cuando ya tiene tracks,
+        // para que Vue reactive dispare el watcher con el stream completo.
 
         pc.ontrack = (event) => {
           console.log("📥 Track remoto recibido:", event.track.kind);
-          event.streams[0]?.getTracks().forEach((track) => {
-            console.log("➕ Añadiendo track remoto:", track.kind, track.id);
-            this.remoteStream?.addTrack(track);
-          });
+
+          if (event.streams && event.streams[0]) {
+            // Usar el stream remoto directamente (ya tiene los tracks)
+            this.remoteStream = event.streams[0];
+            console.log("📥 remoteStream asignado, tracks:", event.streams[0].getTracks().length);
+          } else {
+            // Fallback: construir stream manualmente
+            const current = this.remoteStream ?? new MediaStream();
+            const updated = new MediaStream([...current.getTracks(), event.track]);
+            this.remoteStream = updated;
+            console.log("📥 Track añadido manualmente:", event.track.kind);
+          }
         };
 
         /* ❄ ICE - CON LOGS DETALLADOS */
@@ -108,12 +120,36 @@ export const useWebRTCStore = defineStore("webrtc", {
 
         console.log("✅ PeerConnection configurada correctamente");
       } catch (error) {
-        console.error("❌ Error obteniendo medios:", error);
+        const err = error as Error;
+        console.error("❌ Error obteniendo medios:", err.name, err.message);
 
-        // Intentar con configuración más simple si falla
+        // ── Permiso denegado o contexto no seguro (sin HTTPS / CA no instalada)
+        if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+          const msg =
+            "❌ Permiso de cámara/micrófono denegado.\n\n" +
+            "Causas posibles:\n" +
+            "• El certificado SSL no está instalado en este dispositivo.\n" +
+            "• El navegador bloqueó el permiso manualmente.\n\n" +
+            "Solución: instala el archivo ltesistem-ca.crt como CA de confianza " +
+            "y recarga la página.";
+          alert(msg);
+          throw err; // propaga para que call.ts haga rejectCall / resetCall
+        }
+
+        // ── Contexto no seguro (acceso desde HTTP en vez de HTTPS)
+        if (err.name === "SecurityError") {
+          alert(
+            "❌ El navegador bloqueó el acceso a cámara/micrófono porque " +
+            "la conexión no es segura (HTTP).\n\n" +
+            "Accede al sistema usando HTTPS: https://192.168.1.100:4000"
+          );
+          throw err;
+        }
+
+        // ── Dispositivo no encontrado → intentar configuración mínima
         if (
-          (error as Error).name === "NotFoundError" ||
-          (error as Error).name === "DevicesNotFoundError"
+          err.name === "NotFoundError" ||
+          err.name === "DevicesNotFoundError"
         ) {
           console.log("🔄 Intentando con configuración mínima...");
           try {
@@ -129,7 +165,7 @@ export const useWebRTCStore = defineStore("webrtc", {
             throw fallbackError;
           }
         } else {
-          throw error;
+          throw err;
         }
       }
     },
@@ -146,6 +182,7 @@ export const useWebRTCStore = defineStore("webrtc", {
       this.localStream = null;
       this.remoteStream = null;
       this.onIceCandidate = null;
+      this.pendingIceCandidates = [];
     },
   },
 });

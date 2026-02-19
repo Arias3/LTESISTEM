@@ -179,6 +179,17 @@ export const useCallStore = defineStore("call", {
             console.log("📥 Configurando remote description:", offer.type);
             await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
+            // Drenar ICE candidates que llegaron antes que el offer
+            if (webrtc.pendingIceCandidates.length > 0) {
+              console.log(`🧊 Drenando ${webrtc.pendingIceCandidates.length} ICE candidates buffereados`);
+              for (const c of webrtc.pendingIceCandidates) {
+                await pc.addIceCandidate(new RTCIceCandidate(c)).catch((e) =>
+                  console.warn("⚠️ Error añadiendo ICE buffereado:", e)
+                );
+              }
+              webrtc.pendingIceCandidates = [];
+            }
+
             console.log("📤 Creando answer");
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
@@ -255,6 +266,17 @@ export const useCallStore = defineStore("call", {
               new RTCSessionDescription(answer)
             );
 
+            // Drenar ICE candidates que llegaron antes que el answer
+            if (webrtc.pendingIceCandidates.length > 0) {
+              console.log(`🧊 Drenando ${webrtc.pendingIceCandidates.length} ICE candidates buffereados`);
+              for (const c of webrtc.pendingIceCandidates) {
+                await webrtc.pc.addIceCandidate(new RTCIceCandidate(c)).catch((e) =>
+                  console.warn("⚠️ Error añadiendo ICE buffereado:", e)
+                );
+              }
+              webrtc.pendingIceCandidates = [];
+            }
+
             // 🔥 IMPORTANTE: Cambiar estado SOLO después de establecer conexión
             this.state = "in-call";
             this.isCaller = true;
@@ -315,7 +337,14 @@ export const useCallStore = defineStore("call", {
       /* ❄ ICE CANDIDATE */
       this.socket.on("call:ice-candidate", ({ candidate }) => {
         const webrtc = useWebRTCStore();
-        if (!candidate || !webrtc.pc) return;
+        if (!candidate) return;
+
+        // Si el pc no existe o todavía no tiene remoteDescription, guardar en buffer
+        if (!webrtc.pc || !webrtc.pc.remoteDescription) {
+          console.log("🧊 ICE candidate buffereado (pc no listo aún)");
+          webrtc.pendingIceCandidates.push(candidate);
+          return;
+        }
 
         webrtc.pc
           .addIceCandidate(new RTCIceCandidate(candidate))
