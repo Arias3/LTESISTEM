@@ -66,7 +66,7 @@ if (fs.existsSync(SSL_CERT) && fs.existsSync(SSL_KEY)) {
 /* ================= SOCKET.IO ================= */
 const frontendOrigins = process.env.FRONTEND_ORIGINS
   ? process.env.FRONTEND_ORIGINS.split(',').map(origin => origin.trim())
-  : ["https://192.168.1.100:4000", "http://localhost:4000"];
+  : [`https://${process.env.API_HOST}:4000`, "http://localhost:4000"];
 
 const io = new Server(server, {
   cors: {

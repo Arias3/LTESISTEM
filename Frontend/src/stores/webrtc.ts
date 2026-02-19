@@ -83,17 +83,16 @@ export const useWebRTCStore = defineStore("webrtc", {
         pc.ontrack = (event) => {
           console.log("📥 Track remoto recibido:", event.track.kind);
 
+          // Siempre crear un nuevo MediaStream para forzar que Vue re-dispare el
+          // watcher en cada track (audio Y video). Si se reutiliza la misma
+          // referencia, Vue no detecta el cambio y el <video> no hace play().
           if (event.streams && event.streams[0]) {
-            // Usar el stream remoto directamente (ya tiene los tracks)
-            this.remoteStream = event.streams[0];
-            console.log("📥 remoteStream asignado, tracks:", event.streams[0].getTracks().length);
+            this.remoteStream = new MediaStream(event.streams[0].getTracks());
           } else {
-            // Fallback: construir stream manualmente
-            const current = this.remoteStream ?? new MediaStream();
-            const updated = new MediaStream([...current.getTracks(), event.track]);
-            this.remoteStream = updated;
-            console.log("📥 Track añadido manualmente:", event.track.kind);
+            const prevTracks = this.remoteStream?.getTracks() ?? [];
+            this.remoteStream = new MediaStream([...prevTracks, event.track]);
           }
+          console.log("📥 remoteStream actualizado, tracks:", this.remoteStream.getTracks().length);
         };
 
         /* ❄ ICE - CON LOGS DETALLADOS */
@@ -141,7 +140,7 @@ export const useWebRTCStore = defineStore("webrtc", {
           alert(
             "❌ El navegador bloqueó el acceso a cámara/micrófono porque " +
             "la conexión no es segura (HTTP).\n\n" +
-            "Accede al sistema usando HTTPS: https://192.168.1.100:4000"
+            `Accede al sistema usando HTTPS: https://${import.meta.env.VITE_HOST}:4000`
           );
           throw err;
         }

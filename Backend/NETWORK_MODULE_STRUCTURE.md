@@ -139,7 +139,7 @@ Obtiene estadísticas de un nodo específico.
   "signalQuality": 87,
   "uptime": 3456789,
   "temperature": 42,
-  "acpEndpoint": "http://192.168.1.100/api/stats",
+  "acpEndpoint": "http://192.168.40.18/api/stats",
   "lastUpdate": 1704987654321
 }
 ```
@@ -220,7 +220,7 @@ Sincroniza manualmente las estadísticas con el ACP del nodo.
 {
   "success": true,
   "nodeId": "NODE-001",
-  "acpEndpoint": "http://192.168.1.100/api/stats",
+  "acpEndpoint": "http://192.168.40.18/api/stats",
   "data": {
     "transmitPower": 23.5,
     "downloadFrequency": 2450,
@@ -444,7 +444,7 @@ INSERT INTO network_nodes (
   145.2, 98.7,
   11.018224, -74.850678, 12,
   87, 3456789, 42,
-  'http://192.168.1.100/api/stats'
+  'http://192.168.40.18/api/stats'
 );
 ```
 

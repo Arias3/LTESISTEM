@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { VitePWA } from "vite-plugin-pwa";
 import fs from "fs";
@@ -21,9 +21,13 @@ if (httpsConfig) {
   console.warn("⚠️   Vite: certificados no encontrados → corriendo en HTTP");
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  const HOST = env.VITE_HOST || "0.0.0.0";
+
+  return {
   server: {
-    host: "192.168.1.100", // interfaz eno1 — fija el servidor a esa IP
+    host: HOST,
     port: 4000,
     https: httpsConfig,
   },
@@ -53,4 +57,5 @@ export default defineConfig({
       },
     }),
   ],
+  };
 });
