@@ -219,3 +219,17 @@ debug/
 # Backup files
 *.bak
 *.backup
+
+# ================================
+# SSL / CERTIFICADOS
+# ================================
+
+# Archivos generados por generate-ssl.sh
+ssl/
+*.crt
+*.csr
+*.srl
+*.ext
+
+# Entorno de configuración SSL (contiene la IP del servidor)
+.env.ssl
