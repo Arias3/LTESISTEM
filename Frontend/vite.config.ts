@@ -30,6 +30,10 @@ export default defineConfig(({ mode }) => {
     host: HOST,
     port: 4000,
     https: httpsConfig,
+    hmr: {
+      protocol: "wss",
+      host: "ltesistem.local",
+    },
   },
 
   plugins: [

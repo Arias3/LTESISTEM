@@ -2,6 +2,9 @@
   <div class="dashboard-layout">
     <Sidebar />
 
+    <!-- Banner de permisos de geolocalización -->
+    <GeoPermissionBanner />
+
     <!-- Llamada entrante -->
     <IncomingCallModal v-if="call.state === 'ringing'" />
 
@@ -17,6 +20,7 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
 import Sidebar from "../components/Sidebar.vue";
+import GeoPermissionBanner from "../components/geo/GeoPermissionBanner.vue";
 import { useCallStore } from "../stores/call";
 import { useAuthStore } from "../stores/auth";
 
@@ -26,9 +30,10 @@ import ActiveCall from "../components/Calls/ActiveCall.vue";
 const call = useCallStore();
 const auth = useAuthStore();
 
-// 🔥 Inicializar socket de llamadas cuando entramos al dashboard
+// 🔥 Inicializar sockets cuando entramos al dashboard
 onMounted(() => {
   auth.initCallSocket();
+  auth.initGeoTracking();
 });
 </script>
 

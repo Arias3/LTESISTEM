@@ -1,269 +1,384 @@
 <script setup lang="ts">
 import { useGeoStore } from '../../stores/geo';
+import { computed } from 'vue';
+import type { User } from '../../stores/geo';
 
 const geoStore = useGeoStore();
+const emit = defineEmits(['select-user']);
+
+const sortedUsers = computed(() => {
+  return [...geoStore.users].sort((a, b) => {
+    if (a.online && !b.online) return -1;
+    if (!a.online && b.online) return 1;
+    return b.timestamp - a.timestamp;
+  });
+});
 
 const getRoleColor = (role: string): string => {
-  const roleColors: Record<string, string> = {
-    Administrador: '#2d5088',
-    Técnico: '#5ba3d0',
-    Monitor: '#355c7d',
-    Usuario: '#4a90e2',
+  const colors: Record<string, string> = {
+    ADMIN: '#8b5cf6',
+    Administrador: '#8b5cf6',
+    OPERATOR: '#3b82f6',
+    Técnico: '#06b6d4',
+    Monitor: '#10b981',
+    MOBILE: '#f59e0b',
+    Usuario: '#3b82f6',
   };
-  return roleColors[role] || '#355c7d';
+  return colors[role] || '#3b82f6';
 };
 
-const getRoleIcon = (role: string): string => {
-  const roleIcons: Record<string, string> = {
-    Administrador: '👨‍💼',
-    Técnico: '🔧',
-    Monitor: '👀',
-    Usuario: '👤',
-  };
-  return roleIcons[role] || '👤';
+const getInitials = (name: string): string => {
+  return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+};
+
+const timeAgo = (timestamp: number): string => {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return 'ahora';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+  return `${Math.floor(seconds / 86400)}d`;
+};
+
+const handleSelect = (user: User) => {
+  geoStore.selectMarker(user);
+  emit('select-user');
 };
 </script>
 
 <template>
-  <div class="users-list-container">
-    <div class="list-header">
-      <h3>Usuarios Activos</h3>
-      <span class="count-badge">{{ geoStore.onlineUsers.length }}</span>
+  <div class="users-panel">
+    <div class="panel-header">
+      <h3>
+        <span class="header-icon">👥</span>
+        Usuarios
+      </h3>
+      <div class="header-badges">
+        <span class="badge online-badge">
+          <span class="badge-dot"></span>
+          {{ geoStore.onlineUsers.length }}
+        </span>
+        <span class="badge total-badge">{{ geoStore.users.length }} total</span>
+      </div>
     </div>
 
-    <div class="users-list">
-      <div
-        v-for="user in geoStore.users"
-        :key="user.id"
-        class="user-item"
-        :class="{ active: geoStore.selectedMarker?.id === user.id }"
-        @click="geoStore.selectMarker(user)"
-      >
-        <div class="user-avatar" :style="{ backgroundColor: getRoleColor(user.role) }">
-          {{ getRoleIcon(user.role) }}
-        </div>
+    <!-- Search / filter -->
+    <div class="panel-search">
+      <span class="search-icon">🔍</span>
+      <span class="search-placeholder">Buscar usuario...</span>
+    </div>
 
-        <div class="user-info">
-          <h4 class="user-name">{{ user.name }}</h4>
-          <p class="user-role">{{ user.role }}</p>
-        </div>
+    <div class="users-scroll">
+      <TransitionGroup name="user-list" tag="div" class="users-grid">
+        <div
+          v-for="user in sortedUsers"
+          :key="user.id"
+          class="user-card"
+          :class="{
+            active: geoStore.selectedMarker?.id === user.id,
+            offline: !user.online
+          }"
+          @click="handleSelect(user)"
+        >
+          <div class="user-avatar" :style="{ background: `linear-gradient(135deg, ${getRoleColor(user.role)}, ${getRoleColor(user.role)}cc)` }">
+            {{ getInitials(user.name) }}
+            <span class="avatar-status" :class="{ online: user.online }"></span>
+          </div>
 
-        <div class="user-status">
-          <span class="status-dot" :class="{ online: user.online }"></span>
-          <span class="status-text">{{ user.online ? 'En línea' : 'Fuera' }}</span>
+          <div class="user-details">
+            <span class="user-name">{{ user.name }}</span>
+            <span class="user-meta">
+              <span class="role-tag" :style="{ color: getRoleColor(user.role) }">{{ user.role }}</span>
+              <span class="separator">·</span>
+              <span class="time">{{ timeAgo(user.timestamp) }}</span>
+            </span>
+          </div>
+
+          <div class="user-location-indicator" v-if="user.online">
+            <span class="loc-pulse"></span>
+          </div>
         </div>
-      </div>
+      </TransitionGroup>
 
       <div v-if="geoStore.users.length === 0" class="empty-state">
-        <p>No hay usuarios activos</p>
+        <div class="empty-icon">📍</div>
+        <p>Sin usuarios activos</p>
+        <span>Los usuarios aparecerán aquí al conectarse</span>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.users-list-container {
+.users-panel {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: white;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  color: #e2e8f0;
 }
 
-.list-header {
+.panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8f4f8 100%);
-  border-bottom: 1px solid #e2e8f0;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.list-header h3 {
+.panel-header h3 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #0f172a;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.count-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-  height: 24px;
-  padding: 0 6px;
-  background: #2d5088;
-  color: white;
-  border-radius: 999px;
-  font-size: 12px;
+  font-size: 0.95rem;
   font-weight: 700;
+  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.users-list {
+.header-icon { font-size: 1rem; }
+
+.header-badges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.badge {
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.online-badge {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: pulse 2s infinite;
+}
+
+.total-badge {
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+}
+
+/* Search bar */
+.panel-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 16px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.search-icon { font-size: 0.8rem; opacity: 0.5; }
+.search-placeholder { font-size: 0.8rem; color: #64748b; }
+
+/* Users grid */
+.users-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 8px 12px;
 }
 
-.user-item {
+.users-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.user-card {
   display: flex;
   gap: 12px;
-  padding: 12px;
-  margin-bottom: 8px;
-  border-radius: 8px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.04);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
 }
 
-.user-item:hover {
-  background: #f3f4f6;
-  border-color: #d1d5db;
+.user-card:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.1);
   transform: translateX(4px);
 }
 
-.user-item.active {
-  background: #eff6ff;
-  border-color: #2d5088;
-  box-shadow: 0 2px 8px rgba(45, 80, 136, 0.12);
+.user-card.active {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.1);
 }
 
+.user-card.offline {
+  opacity: 0.5;
+}
+
+.user-card.offline:hover {
+  opacity: 0.7;
+}
+
+/* Avatar */
 .user-avatar {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 40px;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
   color: white;
-  font-size: 20px;
+  font-size: 0.8rem;
+  font-weight: 700;
   flex-shrink: 0;
+  letter-spacing: 0.5px;
 }
 
-.user-info {
+.avatar-status {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #6b7280;
+  border: 2px solid #0f172a;
+}
+
+.avatar-status.online {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+}
+
+/* Details */
+.user-details {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .user-name {
-  margin: 0 0 2px 0;
-  font-size: 13px;
+  font-size: 0.85rem;
   font-weight: 600;
-  color: #1f2937;
+  color: #f1f5f9;
   white-space: nowrap;
-  text-overflow: ellipsis;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.user-role {
-  margin: 0;
-  font-size: 11px;
-  color: #6b7280;
-  font-weight: 500;
+.user-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+}
+
+.role-tag {
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
 
-.user-status {
+.separator { color: #475569; }
+.time { color: #64748b; }
+
+/* Location indicator */
+.user-location-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  flex-shrink: 0;
+}
+
+.loc-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3b82f6;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+  animation: locPulse 2s infinite;
+}
+
+@keyframes locPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(59, 130, 246, 0.5); }
+  50% { box-shadow: 0 0 16px rgba(59, 130, 246, 0.8); }
+}
+
+/* Empty state */
+.empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  min-width: 50px;
+  padding: 40px 20px;
+  text-align: center;
 }
 
-.status-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ef4444;
-  animation: pulse-status 2s infinite;
-}
-
-.status-dot.online {
-  background: #22c55e;
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
-}
-
-.status-text {
-  font-size: 10px;
-  font-weight: 600;
-  color: #6b7280;
-  text-transform: uppercase;
-}
-
-.empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: #9ca3af;
-  font-size: 14px;
+.empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+  opacity: 0.5;
 }
 
 .empty-state p {
-  margin: 0;
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #94a3b8;
 }
 
-/* Scrollbar personalizado */
-.users-list::-webkit-scrollbar {
-  width: 6px;
+.empty-state span {
+  font-size: 0.75rem;
+  color: #64748b;
 }
 
-.users-list::-webkit-scrollbar-track {
-  background: transparent;
-}
+/* Scrollbar */
+.users-scroll::-webkit-scrollbar { width: 4px; }
+.users-scroll::-webkit-scrollbar-track { background: transparent; }
+.users-scroll::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.15); border-radius: 2px; }
+.users-scroll::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.25); }
 
-.users-list::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.3);
-  border-radius: 3px;
-}
+/* List animation */
+.user-list-enter-active { transition: all 0.3s ease; }
+.user-list-leave-active { transition: all 0.2s ease; }
+.user-list-enter-from { opacity: 0; transform: translateX(-20px); }
+.user-list-leave-to { opacity: 0; transform: translateX(20px); }
 
-.users-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.5);
-}
-
-@keyframes pulse-status {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 @media (max-width: 768px) {
-  .list-header h3 {
-    font-size: 12px;
+  .panel-header {
+    padding: 12px 16px 10px;
   }
 
-  .user-item {
-    padding: 10px;
-    margin-bottom: 6px;
+  .user-card {
+    padding: 8px 10px;
   }
 
   .user-avatar {
-    min-width: 36px;
     width: 36px;
     height: 36px;
-    font-size: 16px;
-  }
-
-  .user-name {
-    font-size: 12px;
-  }
-
-  .user-role {
-    font-size: 10px;
+    border-radius: 10px;
+    font-size: 0.75rem;
   }
 }
 </style>
