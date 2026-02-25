@@ -174,6 +174,7 @@ export const GeoService = {
       programmedAt: device.programmedAt,
       lastUpdate: device.lastUpdate.toISOString(),
       timestamp: device.lastUpdate.getTime(),
+      online: true,
     };
   },
 
@@ -202,6 +203,7 @@ export const GeoService = {
       lastUpdate: lastUpdateDate?.toISOString?.() || new Date().toISOString(),
       timestamp: lastUpdateDate?.getTime?.() || Date.now(),
       ipAddress: catalogDevice.ipAddress || null,
+      online: catalogDevice.status === "ACTIVE",
     };
   },
 
@@ -241,13 +243,14 @@ export const GeoService = {
       return prisma.device.update({
         where: { deviceId },
         data: {
-          displayName: displayName || existing.displayName,
-          networkType: networkType || existing.networkType,
-          hasGps: hasGps !== undefined ? hasGps : existing.hasGps,
+          // Preservar la configuración que el usuario guardó en BD, ignorando lo que diga el chip
+          displayName: existing.displayName || displayName || deviceId,
+          networkType: existing.networkType || networkType,
+          hasGps: existing.hasGps !== undefined ? existing.hasGps : hasGps,
           latitude: resolvedLatitude,
           longitude: resolvedLongitude,
-          samplingInterval: samplingInterval || existing.samplingInterval || 5,
-          sensors: sensors || existing.sensors || {},
+          samplingInterval: existing.samplingInterval || samplingInterval || 5,
+          sensors: existing.sensors || sensors || {},
           status: status || existing.status || "ACTIVE",
         },
       });
@@ -342,7 +345,8 @@ export const GeoService = {
 
       const existing = await prisma.geoDevice.findUnique({ where: { deviceId } });
 
-      await this._upsertCatalogDevice({
+      // Actualizar o crear catálogo principal y traer sus datos (para saber su nombre definitivo)
+      const catalogDevice = await this._upsertCatalogDevice({
         deviceId,
         displayName: name || deviceId,
         networkType: networkType || "wifi",
@@ -358,33 +362,34 @@ export const GeoService = {
         const device = await prisma.geoDevice.update({
           where: { deviceId },
           data: {
-            name: name || undefined,
-            type: type || undefined,
-            networkType: networkType || undefined,
-            hasGps: hasGps !== undefined ? hasGps : undefined,
-            samplingInterval: samplingInterval || undefined,
+            // Preservar la configuración guardada en BD
+            name: existing.name || catalogDevice.displayName || name || undefined,
+            type: existing.type || type || undefined,
+            networkType: existing.networkType || catalogDevice.networkType || networkType || undefined,
+            hasGps: existing.hasGps !== undefined ? existing.hasGps : (catalogDevice.hasGps !== undefined ? catalogDevice.hasGps : hasGps),
+            samplingInterval: existing.samplingInterval || catalogDevice.samplingInterval || samplingInterval || undefined,
             latitude: shouldUseIncomingGpsLocation ? latitudeNum : undefined,
             longitude: shouldUseIncomingGpsLocation ? longitudeNum : undefined,
-            sensorConfig: sensorConfig || undefined,
+            sensorConfig: existing.sensorConfig || catalogDevice.sensors || sensorConfig || undefined,
             lastUpdate: new Date(),
           },
         });
         
-        // Log PIR status change if sensorConfig has PIR
-        if (sensorConfig?.pir && typeof sensorConfig.pir === 'object') {
-          const pirValue = sensorConfig.pir.value ?? sensorConfig.pir.detected;
-          if (typeof pirValue === 'number' && (pirValue === 0 || pirValue === 1)) {
+        // Log temperature status change if sensorConfig has temperature
+        if (sensorConfig?.temperature && typeof sensorConfig.temperature === 'object') {
+          const tempValue = sensorConfig.temperature.value;
+          if (typeof tempValue === 'number' && Number.isFinite(tempValue)) {
             const lastLog = await prisma.sensorChangeLog.findFirst({
-              where: { deviceId, sensorName: 'pir' },
+              where: { deviceId, sensorName: 'temperature' },
               orderBy: { changedAt: 'desc' },
             });
-            if (!lastLog || lastLog.newValue !== pirValue) {
+            if (!lastLog || lastLog.newValue !== tempValue) {
               await prisma.sensorChangeLog.create({
                 data: {
                   deviceId,
-                  sensorName: 'pir',
+                  sensorName: 'temperature',
                   previousValue: lastLog?.newValue ?? null,
-                  newValue: pirValue,
+                  newValue: tempValue,
                   changedAt: new Date(),
                 },
               });
@@ -401,7 +406,8 @@ export const GeoService = {
       const created = await prisma.geoDevice.create({
         data: {
           deviceId,
-          name: name || `ESP32-${deviceId.slice(-4)}`,
+          // Tomamos el nombre definitivo del catálogo, si no, el del payload
+          name: catalogDevice.displayName || name || `ESP32-${deviceId.slice(-4)}`,
           type: type || "sensor",
           networkType: networkType || "wifi",
           latitude: initialLatitude,
@@ -412,16 +418,16 @@ export const GeoService = {
         },
       });
       
-      // Log PIR status change on first registration if sensorConfig has PIR
-      if (sensorConfig?.pir && typeof sensorConfig.pir === 'object') {
-        const pirValue = sensorConfig.pir.value ?? sensorConfig.pir.detected;
-        if (typeof pirValue === 'number' && (pirValue === 0 || pirValue === 1)) {
+      // Log temperature change on first registration if sensorConfig has temperature
+      if (sensorConfig?.temperature && typeof sensorConfig.temperature === 'object') {
+        const tempValue = sensorConfig.temperature.value;
+        if (typeof tempValue === 'number' && Number.isFinite(tempValue)) {
           await prisma.sensorChangeLog.create({
             data: {
               deviceId: created.deviceId,
-              sensorName: 'pir',
+              sensorName: 'temperature',
               previousValue: null,  // First registration has no previous value
-              newValue: pirValue,
+              newValue: tempValue,
               changedAt: new Date(),
             },
           });
@@ -582,28 +588,26 @@ export const GeoService = {
         });
       }
 
-      // Registrar cambios de PIR en el log si hay datos nuevos
-      if (sensorData?.pir && (typeof sensorData.pir.value === 'number' || typeof sensorData.pir.value === 'string')) {
-        const pirValue = Number(sensorData.pir.value);
-        if (pirValue === 0 || pirValue === 1) {
+      // Logging if temperature state changed
+      if (sensorData?.temperature && (typeof sensorData.temperature.value === 'number' || typeof sensorData.temperature.value === 'string')) {
+        const tempValue = Number(sensorData.temperature.value);
+        if (Number.isFinite(tempValue)) {
           const lastLog = await prisma.sensorChangeLog.findFirst({
-            where: {
-              deviceId,
-              sensorName: 'pir',
-            },
+            where: { deviceId, sensorName: 'temperature' },
             orderBy: { changedAt: 'desc' },
-            take: 1,
           });
 
           const previousValue = lastLog?.newValue ?? null;
-          if (previousValue !== pirValue) {
+          
+          if (previousValue !== tempValue) {
             await prisma.sensorChangeLog.create({
               data: {
                 deviceId,
-                sensorName: 'pir',
+                sensorName: 'temperature',
                 previousValue,
-                newValue: pirValue,
-              },
+                newValue: tempValue,
+                changedAt: new Date(),
+              }
             });
           }
         }

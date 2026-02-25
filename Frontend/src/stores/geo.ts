@@ -77,6 +77,7 @@ export const useGeoStore = defineStore('geo', () => {
 
   // Polling fallback para dispositivos (aún usan REST)
   let devicePollingInterval: ReturnType<typeof setInterval> | null = null;
+  let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
   const parseCoordinates = (location: any): LocationCoordinates | null => {
     if (!location) return null;
@@ -131,6 +132,14 @@ export const useGeoStore = defineStore('geo', () => {
         username: user.username,
         role: user.role,
       });
+      
+      // Iniciar heartbeat
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      heartbeatInterval = setInterval(() => {
+        if (socket?.connected) {
+          socket.emit('geo:heartbeat');
+        }
+      }, 5_000);
     });
 
     // Recibir ubicaciones de todos los usuarios
@@ -175,6 +184,10 @@ export const useGeoStore = defineStore('geo', () => {
 
     socket.on('disconnect', (reason) => {
       console.log('📍 Geo socket desconectado:', reason);
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
     });
 
     socket.on('connect_error', (error) => {

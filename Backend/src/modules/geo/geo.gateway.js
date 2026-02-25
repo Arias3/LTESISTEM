@@ -54,6 +54,11 @@ export default function initGeoGateway(io) {
     }
   }
 
+  // Broadcast periódico general para refrescar estados stale y sincronizar a todos (cada 5s)
+  setInterval(() => {
+    broadcastUsersSnapshot();
+  }, 5_000);
+
   /** Persiste la ubicación en PostgreSQL con debounce */
   function debouncedPersist(userId, latitude, longitude) {
     // Limpiar timer anterior si existe
@@ -138,6 +143,18 @@ export default function initGeoGateway(io) {
       debouncedPersist(userId, latitude, longitude);
     });
 
+    /* ========= GEO HEARTBEAT ========= */
+    socket.on("geo:heartbeat", () => {
+      const userId = socket.geoUserId;
+      if (!userId) return;
+
+      const userData = geoUsers.get(userId);
+      if (userData) {
+        userData.online = true;
+        userData.timestamp = Date.now();
+      }
+    });
+
     /* ========= DISCONNECT (complementa call gateway) ========= */
     socket.on("disconnect", () => {
       const userId = socket.geoUserId;
@@ -175,14 +192,18 @@ export default function initGeoGateway(io) {
 
         // Marcar offline en DB
         GeoService.setUserOffline(userId).catch((err) => {
-          console.error(`❌ Error marcando offline a ${userId}:`, err.message);
+          if (err.code !== 'P2025' && err.code !== 'P2003') {
+            console.error(`❌ Error marcando offline a ${userId}:`, err.message);
+          }
         });
 
         // Persistir última ubicación conocida
         if (userData.latitude !== 0 && userData.longitude !== 0) {
           GeoService.updateUserLocation(userId, userData.latitude, userData.longitude).catch(
             (err) => {
-              console.error(`❌ Error persistiendo última ubicación de ${userId}:`, err.message);
+              if (err.code !== 'P2025' && err.code !== 'P2003') {
+                console.error(`❌ Error persistiendo última ubicación de ${userId}:`, err.message);
+              }
             }
           );
         }

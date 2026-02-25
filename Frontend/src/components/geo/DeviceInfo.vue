@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { SensorDevice } from '../../stores/geo';
-import { computed } from 'vue';
+import type { SensorDevice } from "../../stores/geo";
+import { computed } from "vue";
 
 interface Props {
   device: SensorDevice;
@@ -13,7 +13,9 @@ const deviceValues = computed(() => {
   return props.device.sensorData || props.device.values || {};
 });
 
-const getValuesDisplay = (values: Record<string, any>): Array<{ label: string; value: string }> => {
+const getValuesDisplay = (
+  values: Record<string, any>,
+): Array<{ label: string; value: string }> => {
   return Object.entries(values).map(([key, value]) => ({
     label: formatLabel(key),
     value: formatValue(value),
@@ -21,62 +23,80 @@ const getValuesDisplay = (values: Record<string, any>): Array<{ label: string; v
 };
 
 const formatLabel = (key: string): string => {
-  return key
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/_/g, ' ')
-    .trim()
-    .charAt(0)
-    .toUpperCase() + key.slice(1);
+  return (
+    key
+      .replace(/([A-Z])/g, " $1")
+      .replace(/_/g, " ")
+      .trim()
+      .charAt(0)
+      .toUpperCase() + key.slice(1)
+  );
 };
 
 const formatValue = (value: any): string => {
-  // Manejar objetos (como PIR sensor)
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    // Si es un sensor PIR
-    if ('detected' in value || 'value' in value) {
-      const pirValue = value.detected ?? value.value;
-      if (typeof pirValue === 'boolean' || pirValue === 0 || pirValue === 1) {
-        return pirValue ? '✅ ACTIVADO' : '❌ DESACTIVADO';
+  // Manejar objetos (como Temperature o PIR sensor)
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    // Si es un sensor de temperatura
+    if (value.type === "temperature" && "value" in value) {
+      return `${Number(value.value).toFixed(1)} °C`;
+    }
+
+    // Mantenemos soporte visual para PIR por retrocompatibilidad
+    if ("detected" in value || "value" in value) {
+      const sensorValue = value.detected ?? value.value;
+      if (
+        typeof sensorValue === "boolean" ||
+        sensorValue === 0 ||
+        sensorValue === 1
+      ) {
+        return sensorValue ? "✅ ACTIVADO" : "❌ DESACTIVADO";
       }
-      return String(pirValue);
+      return String(sensorValue);
     }
     // Para otros objetos, intentar extraer un valor principal
-    if ('value' in value) return String(value.value);
-    if ('reading' in value) return String(value.reading);
-    return '[Datos complejos]';
+    if ("value" in value) return String(value.value);
+    if ("reading" in value) return String(value.reading);
+    return "[Datos complejos]";
   }
-  
-  if (typeof value === 'boolean') {
-    return value ? 'Sí' : 'No';
+
+  if (typeof value === "boolean") {
+    return value ? "Sí" : "No";
   }
-  if (typeof value === 'number') {
+  if (typeof value === "number") {
     return value.toFixed(1);
   }
   if (value === null || value === undefined) {
-    return '-';
+    return "-";
   }
   return String(value);
 };
 
 const getTypeColor = (type: string): string => {
   const typeColors: Record<string, string> = {
-    temperature: '#ff6b35',
-    humidity: '#5ba3d0',
-    motion: '#2d5088',
-    camera: '#9b59b6',
+    temperature: "#ff6b35",
+    humidity: "#5ba3d0",
+    motion: "#2d5088",
+    camera: "#9b59b6",
   };
-  return typeColors[type] || '#355c7d';
+  return typeColors[type] || "#355c7d";
 };
 </script>
 
 <template>
   <div class="device-info">
-    <div class="device-type-badge" :style="{ backgroundColor: getTypeColor(device.type) }">
+    <div
+      class="device-type-badge"
+      :style="{ backgroundColor: getTypeColor(device.type) }"
+    >
       {{ device.type }}
     </div>
 
     <div class="device-values">
-      <div v-for="(item, index) in getValuesDisplay(deviceValues)" :key="index" class="value-row">
+      <div
+        v-for="(item, index) in getValuesDisplay(deviceValues)"
+        :key="index"
+        class="value-row"
+      >
         <span class="value-label">{{ item.label }}</span>
         <span class="value-display">{{ item.value }}</span>
       </div>

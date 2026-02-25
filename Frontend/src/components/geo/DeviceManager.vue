@@ -1,18 +1,18 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
-import { useGeoStore } from '../../stores/geo';
-import { useAuthStore } from '../../stores/auth';
+import { ref, computed, watch, nextTick, onUnmounted } from "vue";
+import { useGeoStore } from "../../stores/geo";
+import { useAuthStore } from "../../stores/auth";
 
 const API_URL = import.meta.env.VITE_API_URL;
 const geoStore = useGeoStore();
 const authStore = useAuthStore();
 
 // State
-const searchId = ref('');
+const searchId = ref("");
 const isSearching = ref(false);
 const searchResult = ref<any>(null);
-const searchError = ref('');
-const saveError = ref('');
+const searchError = ref("");
+const saveError = ref("");
 const showConfig = ref(false);
 const selectedDevice = ref<any>(null);
 const isSaving = ref(false);
@@ -23,13 +23,13 @@ let miniMarker: any = null;
 
 // Edit form
 const editForm = ref({
-  name: '',
-  description: '',
-  type: '',
+  name: "",
+  description: "",
+  type: "",
   latitude: 0,
   longitude: 0,
   samplingInterval: 5,
-  programmedBy: '',
+  programmedBy: "",
 });
 
 // Computed
@@ -37,12 +37,14 @@ const connectedDevices = computed(() => geoStore.devices);
 const hasDevices = computed(() => connectedDevices.value.length > 0);
 const allDevices = computed(() => {
   return [...connectedDevices.value].sort((a, b) => {
-    if (a.status === 'online' && b.status !== 'online') return -1;
-    if (a.status !== 'online' && b.status === 'online') return 1;
+    if (a.status === "online" && b.status !== "online") return -1;
+    if (a.status !== "online" && b.status === "online") return 1;
     return (b.timestamp || 0) - (a.timestamp || 0);
   });
 });
-const onlineCount = computed(() => connectedDevices.value.filter(d => d.status === 'online').length);
+const onlineCount = computed(
+  () => connectedDevices.value.filter((d) => d.status === "online").length,
+);
 const totalCount = computed(() => connectedDevices.value.length);
 
 // Search device by hardware ID
@@ -50,12 +52,14 @@ const searchDevice = async () => {
   if (!searchId.value.trim()) return;
 
   isSearching.value = true;
-  searchError.value = '';
+  searchError.value = "";
   searchResult.value = null;
 
   try {
     // discover es público (sin token)
-    const res = await fetch(`${API_URL}/api/devices/discover/${searchId.value.trim()}`);
+    const res = await fetch(
+      `${API_URL}/api/devices/discover/${searchId.value.trim()}`,
+    );
     const data = await res.json();
 
     if (data.success) {
@@ -64,10 +68,10 @@ const searchDevice = async () => {
         openConfig(data.device);
       }
     } else {
-      searchError.value = data.error || 'Error buscando dispositivo';
+      searchError.value = data.error || "Error buscando dispositivo";
     }
   } catch {
-    searchError.value = 'No se pudo conectar al servidor';
+    searchError.value = "No se pudo conectar al servidor";
   } finally {
     isSearching.value = false;
   }
@@ -77,13 +81,13 @@ const searchDevice = async () => {
 const openConfig = (device: any) => {
   selectedDevice.value = device;
   editForm.value = {
-    name: device.name || '',
-    description: device.description || '',
-    type: device.type || 'sensor',
+    name: device.name || "",
+    description: device.description || "",
+    type: device.type || "sensor",
     latitude: device.location?.latitude || 0,
     longitude: device.location?.longitude || 0,
     samplingInterval: device.samplingInterval || 5,
-    programmedBy: authStore.user?.name || device.programmedBy || '',
+    programmedBy: authStore.user?.name || device.programmedBy || "",
   };
   showConfig.value = true;
 };
@@ -112,9 +116,12 @@ const initMiniMap = async () => {
   const lat = Number(editForm.value.latitude);
   const lng = Number(editForm.value.longitude);
   const hasValidCoords =
-    Number.isFinite(lat) && Number.isFinite(lng) &&
-    lat >= -90 && lat <= 90 &&
-    lng >= -180 && lng <= 180;
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180;
 
   const startLat = hasValidCoords ? lat : 11.019464;
   const startLng = hasValidCoords ? lng : -74.851522;
@@ -124,9 +131,9 @@ const initMiniMap = async () => {
     attributionControl: false,
   }).setView([startLat, startLng], 15);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
-    subdomains: 'abc',
+    subdomains: "abc",
   }).addTo(miniMap);
 
   miniMarker = L.marker([startLat, startLng], {
@@ -135,12 +142,12 @@ const initMiniMap = async () => {
 
   setSelectedCoordinates(startLat, startLng);
 
-  miniMarker.on('dragend', () => {
+  miniMarker.on("dragend", () => {
     const p = miniMarker.getLatLng();
     setSelectedCoordinates(p.lat, p.lng);
   });
 
-  miniMap.on('click', (e: any) => {
+  miniMap.on("click", (e: any) => {
     const p = e.latlng;
     miniMarker.setLatLng(p);
     setSelectedCoordinates(p.lat, p.lng);
@@ -155,7 +162,7 @@ watch(
     } else {
       destroyMiniMap();
     }
-  }
+  },
 );
 
 watch(
@@ -166,14 +173,18 @@ watch(
     const latitude = Number(lat);
     const longitude = Number(lng);
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
-    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return;
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180)
+      return;
 
     const current = miniMarker.getLatLng();
-    if (Math.abs(current.lat - latitude) > 1e-8 || Math.abs(current.lng - longitude) > 1e-8) {
+    if (
+      Math.abs(current.lat - latitude) > 1e-8 ||
+      Math.abs(current.lng - longitude) > 1e-8
+    ) {
       miniMarker.setLatLng([latitude, longitude]);
       miniMap.panTo([latitude, longitude], { animate: true });
     }
-  }
+  },
 );
 
 onUnmounted(() => {
@@ -184,17 +195,20 @@ onUnmounted(() => {
 const saveConfig = async () => {
   if (!selectedDevice.value) return;
   isSaving.value = true;
-  saveError.value = '';
+  saveError.value = "";
 
   try {
-    const res = await fetch(`${API_URL}/api/devices/${selectedDevice.value.deviceId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(authStore.getAuthHeaders() as Record<string, string>),
+    const res = await fetch(
+      `${API_URL}/api/devices/${selectedDevice.value.deviceId}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(authStore.getAuthHeaders() as Record<string, string>),
+        },
+        body: JSON.stringify(editForm.value),
       },
-      body: JSON.stringify(editForm.value),
-    });
+    );
     const data = await res.json();
 
     if (!res.ok) {
@@ -206,11 +220,11 @@ const saveConfig = async () => {
       showConfig.value = false;
       await geoStore.fetchDevices();
     } else {
-      throw new Error(data?.error || 'No se pudo guardar la configuración');
+      throw new Error(data?.error || "No se pudo guardar la configuración");
     }
   } catch (error: any) {
-    saveError.value = error?.message || 'Error guardando config';
-    console.error('Error guardando config:', error);
+    saveError.value = error?.message || "Error guardando config";
+    console.error("Error guardando config:", error);
   } finally {
     isSaving.value = false;
   }
@@ -218,10 +232,10 @@ const saveConfig = async () => {
 
 // Time ago desde timestamp (ms) o ISO string
 const timeAgo = (ts: number | string | undefined): string => {
-  if (!ts) return 'desconocido';
-  const ms = typeof ts === 'string' ? new Date(ts).getTime() : ts;
+  if (!ts) return "desconocido";
+  const ms = typeof ts === "string" ? new Date(ts).getTime() : ts;
   const s = Math.floor((Date.now() - ms) / 1000);
-  if (s < 5)  return 'justo ahora';
+  if (s < 5) return "justo ahora";
   if (s < 60) return `hace ${s}s`;
   if (s < 3600) return `hace ${Math.floor(s / 60)}m`;
   if (s < 86400) return `hace ${Math.floor(s / 3600)}h`;
@@ -234,29 +248,38 @@ const lastSeen = (device: any): string => {
 };
 
 const formatLocation = (device: any): string => {
-  if (!device?.location) return 'sin ubicación';
+  if (!device?.location) return "sin ubicación";
   const lat = Number(device.location.latitude);
   const lng = Number(device.location.longitude);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return 'sin ubicación';
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "sin ubicación";
   return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 };
 
 // Format sensor value
 const formatSensorValue = (sensorName: string, sensorObj: any): string => {
-  if (!sensorObj) return 'N/A';
+  if (!sensorObj) return "N/A";
 
-  // Si es PIR y tiene 'value' numérico
-  if (sensorName === 'pir' || (sensorObj.type === 'pir')) {
-    if (sensorObj.detected === true || sensorObj.value === 1) return '✅ ACTIVADO';
-    if (sensorObj.detected === false || sensorObj.value === 0) return '❌ DESACTIVADO';
+  // Si es Temperatura
+  if (sensorName === "temperature" || sensorObj.type === "temperature") {
+    if (sensorObj.value !== undefined)
+      return `${Number(sensorObj.value).toFixed(1)} °C`;
+  }
+
+  // Si es PIR (retrocompatibilidad)
+  if (sensorName === "pir" || sensorObj.type === "pir") {
+    if (sensorObj.detected === true || sensorObj.value === 1)
+      return "✅ ACTIVADO";
+    if (sensorObj.detected === false || sensorObj.value === 0)
+      return "❌ DESACTIVADO";
   }
 
   // Intentar extraer valor del objeto
-  if (typeof sensorObj === 'object') {
+  if (typeof sensorObj === "object") {
     if (sensorObj.value !== undefined) return String(sensorObj.value);
-    if (sensorObj.detected !== undefined) return sensorObj.detected ? 'Sí' : 'No';
+    if (sensorObj.detected !== undefined)
+      return sensorObj.detected ? "Sí" : "No";
     if (sensorObj.reading !== undefined) return String(sensorObj.reading);
-    return '...';
+    return "...";
   }
 
   // Default
@@ -267,8 +290,8 @@ const formatSensor = (data: Record<string, any>) => {
   return Object.entries(data).map(([key, val]) => ({
     name: key,
     value: formatSensorValue(key, val),
-    type: val?.type || 'unknown',
-    unit: val?.unit || '',
+    type: val?.type || "unknown",
+    unit: val?.unit || "",
   }));
 };
 </script>
@@ -285,16 +308,24 @@ const formatSensor = (data: Record<string, any>) => {
         @keyup.enter="searchDevice"
       />
       <button class="search-btn" @click="searchDevice" :disabled="isSearching">
-        {{ isSearching ? '⏳' : '🔍' }}
+        {{ isSearching ? "⏳" : "🔍" }}
       </button>
     </div>
 
     <!-- Search result -->
-    <div v-if="searchResult" class="search-result" :class="{ found: searchResult.found }">
+    <div
+      v-if="searchResult"
+      class="search-result"
+      :class="{ found: searchResult.found }"
+    >
       <template v-if="searchResult.found">
         <span class="result-icon">✅</span>
-        <span>Encontrado: <strong>{{ searchResult.device.name }}</strong></span>
-        <button class="config-btn" @click="openConfig(searchResult.device)">⚙️ Config</button>
+        <span
+          >Encontrado: <strong>{{ searchResult.device.name }}</strong></span
+        >
+        <button class="config-btn" @click="openConfig(searchResult.device)">
+          ⚙️ Config
+        </button>
       </template>
       <template v-else>
         <span class="result-icon">ℹ️</span>
@@ -323,35 +354,59 @@ const formatSensor = (data: Record<string, any>) => {
         >
           <div class="card-header">
             <div class="card-left">
-              <span class="device-icon" :class="{ 'icon-offline': device.status === 'offline' }">
-                {{ device.icon || '📡' }}
+              <span
+                class="device-icon"
+                :class="{ 'icon-offline': device.status === 'offline' }"
+              >
+                {{ device.icon || "📡" }}
               </span>
               <div class="device-info">
                 <span class="device-name">{{ device.name }}</span>
-                <span class="device-type">{{ device.deviceId || device.type }}</span>
+                <span class="device-type">{{
+                  device.deviceId || device.type
+                }}</span>
               </div>
             </div>
             <div class="card-right">
               <span class="status-dot" :class="device.status"></span>
-              <button class="config-btn-sm" @click.stop="openConfig(device)" title="Configurar">⚙️</button>
+              <button
+                class="config-btn-sm"
+                @click.stop="openConfig(device)"
+                title="Configurar"
+              >
+                ⚙️
+              </button>
             </div>
           </div>
 
           <!-- Sensor data (solo si hay y está online) -->
-          <div v-if="device.status === 'online' && device.sensorData && Object.keys(device.sensorData).length > 0" class="sensor-grid">
+          <div
+            v-if="
+              device.status === 'online' &&
+              device.sensorData &&
+              Object.keys(device.sensorData).length > 0
+            "
+            class="sensor-grid"
+          >
             <div
               v-for="sensor in formatSensor(device.sensorData)"
               :key="sensor.name"
               class="sensor-pill"
             >
               <span class="sensor-name">{{ sensor.name }}</span>
-              <span class="sensor-value">{{ sensor.value }} <small>{{ sensor.unit }}</small></span>
+              <span class="sensor-value"
+                >{{ sensor.value }} <small>{{ sensor.unit }}</small></span
+              >
             </div>
           </div>
 
           <div class="card-footer">
             <span class="card-time">
-              {{ device.status === 'online' ? '🟢 En línea' : '⚫ Última vez: ' + lastSeen(device) }}
+              {{
+                device.status === "online"
+                  ? "🟢 En línea"
+                  : "⚫ Última vez: " + lastSeen(device)
+              }}
             </span>
             <span class="card-location">📍 {{ formatLocation(device) }}</span>
             <span class="card-interval" v-if="device.samplingInterval">
@@ -370,7 +425,11 @@ const formatSensor = (data: Record<string, any>) => {
 
     <!-- Config modal -->
     <Transition name="modal">
-      <div v-if="showConfig" class="modal-overlay" @click.self="showConfig = false">
+      <div
+        v-if="showConfig"
+        class="modal-overlay"
+        @click.self="showConfig = false"
+      >
         <div class="modal-content">
           <div class="modal-header">
             <h4>⚙️ Configurar dispositivo</h4>
@@ -381,7 +440,12 @@ const formatSensor = (data: Record<string, any>) => {
             <div v-if="saveError" class="save-error">{{ saveError }}</div>
             <div class="form-row">
               <label>ID Hardware</label>
-              <input type="text" :value="selectedDevice.deviceId" disabled class="input-disabled" />
+              <input
+                type="text"
+                :value="selectedDevice.deviceId"
+                disabled
+                class="input-disabled"
+              />
             </div>
             <div class="form-row">
               <label>Nombre</label>
@@ -389,7 +453,11 @@ const formatSensor = (data: Record<string, any>) => {
             </div>
             <div class="form-row">
               <label>Descripción</label>
-              <input v-model="editForm.description" type="text" placeholder="Ej: Sensor de puerta principal" />
+              <input
+                v-model="editForm.description"
+                type="text"
+                placeholder="Ej: Sensor de puerta principal"
+              />
             </div>
             <div class="form-row">
               <label>Tipo</label>
@@ -405,13 +473,19 @@ const formatSensor = (data: Record<string, any>) => {
               <label>Ubicación en mapa (clic o arrastra el marcador)</label>
               <div ref="mapContainer" class="mini-map"></div>
               <div class="coords-preview">
-                📍 {{ editForm.latitude.toFixed(6) }}, {{ editForm.longitude.toFixed(6) }}
+                📍 {{ editForm.latitude.toFixed(6) }},
+                {{ editForm.longitude.toFixed(6) }}
               </div>
             </div>
             <div class="form-row two-col">
               <div>
                 <label>Intervalo (s)</label>
-                <input v-model.number="editForm.samplingInterval" type="number" min="1" max="300" />
+                <input
+                  v-model.number="editForm.samplingInterval"
+                  type="number"
+                  min="1"
+                  max="300"
+                />
               </div>
               <div>
                 <label>Programado por</label>
@@ -420,10 +494,20 @@ const formatSensor = (data: Record<string, any>) => {
             </div>
 
             <!-- Sensor config display -->
-            <div v-if="selectedDevice.sensorConfig && Object.keys(selectedDevice.sensorConfig).length > 0" class="sensor-config-section">
+            <div
+              v-if="
+                selectedDevice.sensorConfig &&
+                Object.keys(selectedDevice.sensorConfig).length > 0
+              "
+              class="sensor-config-section"
+            >
               <label>Sensores configurados</label>
               <div class="sensor-config-list">
-                <div v-for="(cfg, key) in selectedDevice.sensorConfig" :key="key" class="sensor-cfg-item">
+                <div
+                  v-for="(cfg, key) in selectedDevice.sensorConfig"
+                  :key="key"
+                  class="sensor-cfg-item"
+                >
                   <span class="cfg-name">{{ key }}</span>
                   <span class="cfg-type">{{ (cfg as any).type }}</span>
                   <span class="cfg-pin">Pin {{ (cfg as any).pin }}</span>
@@ -433,9 +517,11 @@ const formatSensor = (data: Record<string, any>) => {
           </div>
 
           <div class="modal-footer">
-            <button class="btn-cancel" @click="showConfig = false">Cancelar</button>
+            <button class="btn-cancel" @click="showConfig = false">
+              Cancelar
+            </button>
             <button class="btn-save" @click="saveConfig" :disabled="isSaving">
-              {{ isSaving ? 'Guardando...' : '💾 Guardar' }}
+              {{ isSaving ? "Guardando..." : "💾 Guardar" }}
             </button>
           </div>
         </div>
@@ -496,8 +582,12 @@ const formatSensor = (data: Record<string, any>) => {
   transition: border-color 0.2s;
 }
 
-.search-input::placeholder { color: #64748b; }
-.search-input:focus { border-color: #3b82f6; }
+.search-input::placeholder {
+  color: #64748b;
+}
+.search-input:focus {
+  border-color: #3b82f6;
+}
 
 .search-btn {
   width: 36px;
@@ -511,7 +601,9 @@ const formatSensor = (data: Record<string, any>) => {
   transition: background 0.2s;
 }
 
-.search-btn:hover { background: rgba(59, 130, 246, 0.35); }
+.search-btn:hover {
+  background: rgba(59, 130, 246, 0.35);
+}
 
 .search-result {
   display: flex;
@@ -525,7 +617,9 @@ const formatSensor = (data: Record<string, any>) => {
   color: #94a3b8;
 }
 
-.search-result.found { border-color: rgba(34, 197, 94, 0.2); }
+.search-result.found {
+  border-color: rgba(34, 197, 94, 0.2);
+}
 .config-btn {
   margin-left: auto;
   padding: 3px 8px;
@@ -559,7 +653,7 @@ const formatSensor = (data: Record<string, any>) => {
   border: 1px solid rgba(59, 130, 246, 0.2);
   border-radius: 8px;
   padding: 6px 8px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
 }
 
 .save-error {
@@ -606,7 +700,9 @@ const formatSensor = (data: Record<string, any>) => {
   gap: 8px;
 }
 
-.device-icon { font-size: 1.2rem; }
+.device-icon {
+  font-size: 1.2rem;
+}
 
 .device-info {
   display: flex;
@@ -660,7 +756,9 @@ const formatSensor = (data: Record<string, any>) => {
   transition: background 0.2s;
 }
 
-.config-btn-sm:hover { background: rgba(255, 255, 255, 0.12); }
+.config-btn-sm:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
 
 /* Sensor grid */
 .sensor-grid {
@@ -690,7 +788,7 @@ const formatSensor = (data: Record<string, any>) => {
 .sensor-value {
   color: #93c5fd;
   font-weight: 700;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
 }
 
 .sensor-value small {
@@ -726,7 +824,10 @@ const formatSensor = (data: Record<string, any>) => {
   gap: 6px;
 }
 
-.empty-icon { font-size: 2rem; opacity: 0.3; }
+.empty-icon {
+  font-size: 2rem;
+  opacity: 0.3;
+}
 
 .empty-state p {
   font-size: 0.8rem;
@@ -828,12 +929,14 @@ const formatSensor = (data: Record<string, any>) => {
 }
 
 .form-row input:focus,
-.form-row select:focus { border-color: #3b82f6; }
+.form-row select:focus {
+  border-color: #3b82f6;
+}
 
 .input-disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   font-size: 0.75rem !important;
   color: #93c5fd !important;
 }
@@ -878,9 +981,18 @@ const formatSensor = (data: Record<string, any>) => {
   font-size: 0.75rem;
 }
 
-.cfg-name { color: #e2e8f0; font-weight: 600; flex: 1; }
-.cfg-type { color: #93c5fd; }
-.cfg-pin { color: #64748b; font-family: monospace; }
+.cfg-name {
+  color: #e2e8f0;
+  font-weight: 600;
+  flex: 1;
+}
+.cfg-type {
+  color: #93c5fd;
+}
+.cfg-pin {
+  color: #64748b;
+  font-family: monospace;
+}
 
 /* Modal footer */
 .modal-footer {
@@ -890,7 +1002,8 @@ const formatSensor = (data: Record<string, any>) => {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.btn-cancel, .btn-save {
+.btn-cancel,
+.btn-save {
   flex: 1;
   padding: 10px;
   border: none;
@@ -911,17 +1024,41 @@ const formatSensor = (data: Record<string, any>) => {
   color: white;
 }
 
-.btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-save:hover:not(:disabled) { box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3); }
+.btn-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-save:hover:not(:disabled) {
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+}
 
 /* Transitions */
-.modal-enter-active { transition: all 0.25s ease; }
-.modal-leave-active { transition: all 0.2s ease; }
-.modal-enter-from, .modal-leave-to { opacity: 0; }
-.modal-enter-from .modal-content { transform: scale(0.95) translateY(10px); }
+.modal-enter-active {
+  transition: all 0.25s ease;
+}
+.modal-leave-active {
+  transition: all 0.2s ease;
+}
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+.modal-enter-from .modal-content {
+  transform: scale(0.95) translateY(10px);
+}
 
-.list-enter-active { transition: all 0.3s ease; }
-.list-leave-active { transition: all 0.2s ease; }
-.list-enter-from { opacity: 0; transform: translateX(-10px); }
-.list-leave-to { opacity: 0; transform: translateX(10px); }
+.list-enter-active {
+  transition: all 0.3s ease;
+}
+.list-leave-active {
+  transition: all 0.2s ease;
+}
+.list-enter-from {
+  opacity: 0;
+  transform: translateX(-10px);
+}
+.list-leave-to {
+  opacity: 0;
+  transform: translateX(10px);
+}
 </style>

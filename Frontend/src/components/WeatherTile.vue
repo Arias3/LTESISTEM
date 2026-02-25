@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import MosaicTile from './MosaicTile.vue';
+import { ref, onMounted } from "vue";
+import MosaicTile from "./MosaicTile.vue";
 
 interface WeatherData {
   temp: number;
@@ -17,7 +17,10 @@ const loading = ref(true);
 const error = ref(false);
 
 // Obtener ubicación del usuario
-const getUserLocation = async (): Promise<{ lat: number; lon: number } | null> => {
+const getUserLocation = async (): Promise<{
+  lat: number;
+  lon: number;
+} | null> => {
   return new Promise((resolve) => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -28,44 +31,53 @@ const getUserLocation = async (): Promise<{ lat: number; lon: number } | null> =
           });
         },
         () => {
-          // Si no hay permiso, usar coordenadas por defecto (ej: CDMX)
-          resolve({ lat: 19.4326, lon: -99.1332 });
+          // Si falla, retornamos null para que la API intente adivinar por IP
+          resolve(null);
         },
         {
-          timeout: 10000,
-          enableHighAccuracy: false,
-        }
+          timeout: 15000,
+          enableHighAccuracy: true,
+          maximumAge: 0,
+        },
       );
     } else {
-      resolve({ lat: 19.4326, lon: -99.1332 });
+      resolve(null);
     }
   });
 };
 
 // Mapear códigos WMO a emojis e iconos legibles
-const getWeatherIcon = (code: number, isDay: boolean): { emoji: string; description: string } => {
-  const iconMap: Record<number, { day: string; night: string; desc: string }> = {
-    0: { day: '☀️', night: '🌙', desc: 'Despejado' },
-    1: { day: '🌤️', night: '🌥️', desc: 'Mayormente despejado' },
-    2: { day: '⛅', night: '☁️', desc: 'Parcialmente nublado' },
-    3: { day: '☁️', night: '☁️', desc: 'Nublado' },
-    45: { day: '🌫️', night: '🌫️', desc: 'Nubina' },
-    48: { day: '🌫️', night: '🌫️', desc: 'Nubina con depósito' },
-    51: { day: '🌦️', night: '🌧️', desc: 'Llovizna leve' },
-    53: { day: '🌦️', night: '🌧️', desc: 'Llovizna moderada' },
-    55: { day: '🌧️', night: '⛈️', desc: 'Llovizna densa' },
-    61: { day: '🌧️', night: '🌧️', desc: 'Lluvia ligera' },
-    63: { day: '🌧️', night: '🌧️', desc: 'Lluvia moderada' },
-    65: { day: '⛈️', night: '⛈️', desc: 'Lluvia fuerte' },
-    71: { day: '🌨️', night: '🌨️', desc: 'Nieve ligera' },
-    73: { day: '🌨️', night: '🌨️', desc: 'Nieve moderada' },
-    75: { day: '❄️', night: '❄️', desc: 'Nieve fuerte' },
-    80: { day: '🌧️', night: '🌧️', desc: 'Lluvia' },
-    81: { day: '⛈️', night: '⛈️', desc: 'Tormenta' },
-    82: { day: '⛈️', night: '⛈️', desc: 'Tormenta fuerte' },
-  };
+const getWeatherIcon = (
+  code: number,
+  isDay: boolean,
+): { emoji: string; description: string } => {
+  const iconMap: Record<number, { day: string; night: string; desc: string }> =
+    {
+      0: { day: "☀️", night: "🌙", desc: "Despejado" },
+      1: { day: "🌤️", night: "🌥️", desc: "Mayormente despejado" },
+      2: { day: "⛅", night: "☁️", desc: "Parcialmente nublado" },
+      3: { day: "☁️", night: "☁️", desc: "Nublado" },
+      45: { day: "🌫️", night: "🌫️", desc: "Nubina" },
+      48: { day: "🌫️", night: "🌫️", desc: "Nubina con depósito" },
+      51: { day: "🌦️", night: "🌧️", desc: "Llovizna leve" },
+      53: { day: "🌦️", night: "🌧️", desc: "Llovizna moderada" },
+      55: { day: "🌧️", night: "⛈️", desc: "Llovizna densa" },
+      61: { day: "🌧️", night: "🌧️", desc: "Lluvia ligera" },
+      63: { day: "🌧️", night: "🌧️", desc: "Lluvia moderada" },
+      65: { day: "⛈️", night: "⛈️", desc: "Lluvia fuerte" },
+      71: { day: "🌨️", night: "🌨️", desc: "Nieve ligera" },
+      73: { day: "🌨️", night: "🌨️", desc: "Nieve moderada" },
+      75: { day: "❄️", night: "❄️", desc: "Nieve fuerte" },
+      80: { day: "🌧️", night: "🌧️", desc: "Lluvia" },
+      81: { day: "⛈️", night: "⛈️", desc: "Tormenta" },
+      82: { day: "⛈️", night: "⛈️", desc: "Tormenta fuerte" },
+    };
 
-  const weatherInfo = iconMap[code] || { day: '🌡️', night: '🌡️', desc: 'Desconocido' };
+  const weatherInfo = iconMap[code] || {
+    day: "🌡️",
+    night: "🌡️",
+    desc: "Desconocido",
+  };
   return {
     emoji: isDay ? weatherInfo.day : weatherInfo.night,
     description: weatherInfo.desc,
@@ -78,20 +90,27 @@ const fetchWeather = async () => {
     error.value = false;
 
     const location = await getUserLocation();
-    if (!location) throw new Error('No se pudo obtener la ubicación');
+
+    // Si tenemos ubicación exacta, la usamos. Si no, usamos auto:ip para adivinar por la IP de red
+    const locationQuery = location
+      ? `latitude=${location.lat}&longitude=${location.lon}`
+      : `auto:ip`;
 
     // API Open-Meteo (gratuita, sin API key, con CORS habilitado)
     const response = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,is_day,apparent_temperature&timezone=auto`,
-      { method: 'GET' }
+      `https://api.open-meteo.com/v1/forecast?${locationQuery}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,is_day,apparent_temperature&timezone=auto`,
+      { method: "GET" },
     );
 
-    if (!response.ok) throw new Error('Error al obtener datos del clima');
+    if (!response.ok) throw new Error("Error al obtener datos del clima");
 
     const data = await response.json();
     const current = data.current;
 
-    const { emoji, description } = getWeatherIcon(current.weather_code, current.is_day);
+    const { emoji, description } = getWeatherIcon(
+      current.weather_code,
+      current.is_day,
+    );
 
     weather.value = {
       temp: Math.round(current.temperature_2m),
@@ -99,11 +118,11 @@ const fetchWeather = async () => {
       humidity: current.relative_humidity_2m,
       windSpeed: Math.round(current.wind_speed_10m * 10) / 10,
       icon: emoji,
-      location: data.timezone || 'Tu ubicación',
+      location: data.timezone || "Tu ubicación",
       feelsLike: Math.round(current.apparent_temperature),
     };
   } catch (err) {
-    console.error('Error al cargar el clima:', err);
+    console.error("Error al cargar el clima:", err);
     error.value = true;
   } finally {
     loading.value = false;
@@ -153,7 +172,13 @@ onMounted(() => {
   </MosaicTile>
 
   <!-- Mosaico de error -->
-  <MosaicTile v-else-if="error" title="Clima" icon="⚠️" :size="'2x1'" color="#e74c3c">
+  <MosaicTile
+    v-else-if="error"
+    title="Clima"
+    icon="⚠️"
+    :size="'2x1'"
+    color="#e74c3c"
+  >
     <div class="error-message">
       <p>No se pudo cargar el clima</p>
       <button @click="fetchWeather" class="retry-btn">Reintentar</button>
@@ -161,7 +186,14 @@ onMounted(() => {
   </MosaicTile>
 
   <!-- Mosaico de carga -->
-  <MosaicTile v-else title="Clima" icon="☁️" :size="'2x1'" color="#2b6cb0" :loading="true" />
+  <MosaicTile
+    v-else
+    title="Clima"
+    icon="☁️"
+    :size="'2x1'"
+    color="#2b6cb0"
+    :loading="true"
+  />
 </template>
 
 <style scoped>
