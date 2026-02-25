@@ -1,6 +1,6 @@
 /**
  * =======================================================
- *  LTESISTEM -- ESP32 PIR Simulation Node
+ *  LTESISTEM -- ESP32 Temperature Sensor Node (ZERO-LATENCY)
  * =======================================================
  *
  *  Flujo de arranque:
@@ -9,10 +9,10 @@
  *  3. Guardar JWT
  *  4. Conectar WSS Socket.IO (JWT en query param + header)
  *  5. Emitir device:register -> recibir config del backend
- *  6. Loop: leer Serial (1/0) -> emitir sensor PIR
+ *  6. Loop: leer Serial (T:XX.XX) -> emitir temperatura INMEDIATAMENTE
  *
  *  CONFIGURACION INICIAL: modificar la seccion debajo
- * =======================================================
+ * ======================================================="
  */
 
 #include <Arduino.h>
@@ -27,14 +27,14 @@
 // =======================================================
 
 // -- Red WiFi --
-const char *WIFI_SSID = "Familia Arias Alfonsos";
-const char *WIFI_PASSWORD = "524185650";
+const char *WIFI_SSID = "unigrid";
+const char *WIFI_PASSWORD = "unigrid1";
 
 // -- Backend (HTTPS) --
-const char *SERVER_HOST = "192.168.0.106";
+const char *SERVER_HOST = "192.168.1.100";  
 const int SERVER_PORT = 5000;
 
-// URL base construida en setup()
+// URL base construida en setup() 
 String API_BASE;
 
 // -- Contrasena por defecto de dispositivos --
@@ -53,18 +53,18 @@ const bool HAS_GPS = false;
 float LATITUDE = 11.019464;
 float LONGITUDE = -74.851522;
 
-// -- Intervalo de muestreo (ms) --
-unsigned long SAMPLING_INTERVAL = 5000;
+// -- No hay intervalo de muestreo - ZERO-LATENCY --
+// Los datos se envían INMEDIATAMENTE cuando hay cambio
 
 // =======================================================
-//  PIR SIMULATION (SERIAL)
-//  Escribe "1" + Enter para detectar movimiento
-//  Escribe "0" + Enter para reposo
+//  TEMPERATURE SIMULATION (SERIAL)
+//  Escribe "T:25.5" + Enter para establecer temperatura
+//  Rango: 0 a 50 grados Celsius
 // =======================================================
 
-bool pirDetected = false;
-unsigned long pirLastChanged = 0;
-int pirLastSentValue = -1;  // -1 = nunca enviado, 0/1 = valor anterior
+float currentTemp = 20.0f;
+float lastSentTemp = -999.0f;  // Valor inicial imposible para forzar envío primera vez
+unsigned long tempLastChanged = 0;
 
 // =======================================================
 //  VARIABLES INTERNAS
@@ -76,10 +76,10 @@ String jwtToken = "";
 bool socketConnected = false;
 bool registered = false;
 bool configReceived = false;
-unsigned long lastSensorRead = 0;
+// lastSensorRead removido - no hay intervalo de muestreo
 unsigned long lastHeartbeatSent = 0;
 unsigned long reconnectTimer = 0;
-const unsigned long HEARTBEAT_INTERVAL_MS = 10000;
+const unsigned long HEARTBEAT_INTERVAL_MS = 5000;
 
 // =======================================================
 //  FORWARD DECLARATIONS
@@ -88,7 +88,8 @@ const unsigned long HEARTBEAT_INTERVAL_MS = 10000;
 void registerDevice();
 void handleConfigResponse(JsonVariant data);
 void connectSocket();
-void handleSerialPirInput();
+void handleSerialTemperatureInput();
+void readAndSendSensors();
 
 // =======================================================
 //  FUNCIONES AUXILIARES
@@ -118,21 +119,28 @@ void socketEmit(const char *event, JsonDocument &data) {
   Serial.printf("[WS] Emit: %s\n", event);
 }
 
-void handleSerialPirInput() {
+void handleSerialTemperatureInput() {
   while (Serial.available() > 0) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
 
-    if (cmd == "1") {
-      pirDetected = true;
-      pirLastChanged = millis();
-      Serial.println("[PIR] Movimiento detectado (1)");
-    } else if (cmd == "0") {
-      pirDetected = false;
-      pirLastChanged = millis();
-      Serial.println("[PIR] Sin movimiento (0)");
+    // Espera formato: "T:XX.XX" ej: "T:25.5"
+    if (cmd.startsWith("T:")) {
+      String tempStr = cmd.substring(2);
+      float newTemp = tempStr.toFloat();
+      
+      // Validar rango 0-50
+      if (newTemp >= 0 && newTemp <= 50) {
+        currentTemp = newTemp;
+        tempLastChanged = millis();
+        Serial.printf("[TEMP] Nueva temperatura: %.1f°C\n", currentTemp);
+        // Enviar INMEDIATAMENTE - cero latencia
+        readAndSendSensors();
+      } else {
+        Serial.println("[TEMP] Error: rango debe estar entre 0 y 50°C");
+      }
     } else if (cmd.length() > 0) {
-      Serial.println("[PIR] Comando invalido. Use 1 o 0");
+      Serial.println("[TEMP] Formato: T:XX.XX (ej: T:25.5)");
     }
   }
 }
@@ -239,12 +247,12 @@ void registerDevice() {
   doc["latitude"] = LATITUDE;
   doc["longitude"] = LONGITUDE;
   doc["hasGps"] = HAS_GPS;
-  doc["samplingInterval"] = (int)(SAMPLING_INTERVAL / 1000);
+  doc["samplingInterval"] = 0;  // Zero-latency, sin intervalo
 
   JsonObject sensorCfg = doc["sensorConfig"].to<JsonObject>();
-  JsonObject pir = sensorCfg["pir"].to<JsonObject>();
-  pir["type"] = "pir";
-  pir["unit"] = "boolean";
+  JsonObject temp = sensorCfg["temperature"].to<JsonObject>();
+  temp["type"] = "temperature";
+  temp["unit"] = "celsius";
 
   socketEmit("device:register", doc);
   registered = true;
@@ -269,18 +277,13 @@ void handleConfigResponse(JsonVariant data) {
 
   DEVICE_NAME = String(config["name"].as<const char *>());
 
-  int interval = config["samplingInterval"].as<int>();
-  if (interval > 0)
-    SAMPLING_INTERVAL = (unsigned long)interval * 1000UL;
-
   if (!HAS_GPS && config["location"]["latitude"].as<float>() != 0.0f) {
     LATITUDE = config["location"]["latitude"].as<float>();
     LONGITUDE = config["location"]["longitude"].as<float>();
   }
 
   configReceived = true;
-  Serial.println("[REG] Dispositivo listo -- enviando datos cada " +
-                 String(SAMPLING_INTERVAL / 1000) + "s");
+  Serial.println("[REG] Dispositivo listo -- modo ZERO-LATENCY activado");
 }
 
 // =======================================================
@@ -288,29 +291,27 @@ void handleConfigResponse(JsonVariant data) {
 // =======================================================
 
 void readAndSendSensors() {
-  JsonDocument doc;
-  doc["deviceId"] = DEVICE_ID;
-  
-  int currentPirValue = pirDetected ? 1 : 0;
-  
-  // Solo enviar si cambió respecto a la última vez
-  if (pirLastSentValue == currentPirValue) {
-    Serial.printf("[SENSOR] PIR sin cambio (seguía %d), no enviando\n", currentPirValue);
+  // ZERO-LATENCY: enviar si el socket está conectado
+  if (!socketConnected) {
     return;
   }
 
-  JsonObject sensorData = doc["sensorData"].to<JsonObject>();
-  JsonObject pir = sensorData["pir"].to<JsonObject>();
-  pir["value"] = currentPirValue;
-  pir["detected"] = pirDetected;
-  pir["type"] = "pir";
-  pir["unit"] = "boolean";
-  pir["lastChangedMs"] = (uint32_t)pirLastChanged;
-  pir["timestamp"] = millis();
+  // Solo enviar si cambió respecto a la última vez (threshold: 0.1°C)
+  if (currentTemp >= lastSentTemp - 0.05f && currentTemp <= lastSentTemp + 0.05f) {
+    return; // Sin cambio significativo
+  }
 
-  Serial.printf("[SENSOR] PIR cambió a %d, enviando...\n", currentPirValue);
-  pirLastSentValue = currentPirValue;
-  
+  JsonDocument doc;
+  doc["deviceId"] = DEVICE_ID;
+
+  JsonObject sensorData = doc["sensorData"].to<JsonObject>();
+  JsonObject temp = sensorData["temperature"].to<JsonObject>();
+  temp["value"] = (float)((int)(currentTemp * 10)) / 10.0f; // Un decimal
+  temp["type"] = "temperature";
+  temp["unit"] = "celsius";
+  temp["timestamp"] = millis();
+
+  lastSentTemp = currentTemp;
   socketEmit("device:sensor-update", doc);
 }
 
@@ -323,6 +324,7 @@ void sendHeartbeat() {
   doc["latitude"] = LATITUDE;
   doc["longitude"] = LONGITUDE;
   socketEmit("device:heartbeat", doc);
+  Serial.println("[HEARTBEAT] Enviado");
 }
 
 // =======================================================
@@ -402,10 +404,10 @@ void connectSocket() {
 
 void setup() {
   Serial.begin(115200);
-  delay(1000);
+  // Sin delay innecesario
 
   Serial.println("\n=======================================================");
-  Serial.println("  LTESISTEM -- ESP32 PIR Simulation Node");
+  Serial.println("  LTESISTEM -- ESP32 Temperature Sensor (ZERO-LATENCY)");
   Serial.println("=======================================================");
 
   API_BASE = "https://";
@@ -415,7 +417,7 @@ void setup() {
 
   DEVICE_ID = generateDeviceId();
   Serial.printf("[INIT] Device ID: %s\n", DEVICE_ID.c_str());
-  Serial.println("[INIT] PIR serial simulation activa (1/0)");
+  Serial.println("[INIT] Temperatura serial activa. Formato: T:XX.XX (rango 0-50)");
   Serial.printf("[INIT] API Base:  %s\n", API_BASE.c_str());
 
   connectWiFi();
@@ -431,13 +433,12 @@ void setup() {
 
 void loop() {
   webSocket.loop();
-  handleSerialPirInput();
+  handleSerialTemperatureInput();  // Sin delay - lee si hay datos disponibles
 
   // ── Reconexion WiFi ──
   if (WiFi.status() != WL_CONNECTED) {
     if (millis() - reconnectTimer > 10000) {
       reconnectTimer = millis();
-      Serial.println("[WIFI] Reconectando...");
       connectWiFi();
       if (WiFi.status() == WL_CONNECTED) {
         if (jwtToken.length() == 0)
@@ -459,13 +460,7 @@ void loop() {
     return;
   }
 
-  // ── Enviar datos de sensores (tras recibir config) ──
-  if (configReceived && millis() - lastSensorRead >= SAMPLING_INTERVAL) {
-    lastSensorRead = millis();
-    readAndSendSensors();
-  }
-
-  // ── Heartbeat independiente del muestreo ──
+  // ── Heartbeat independiente (mantenimiento de conexión) ──
   if (configReceived && millis() - lastHeartbeatSent >= HEARTBEAT_INTERVAL_MS) {
     lastHeartbeatSent = millis();
     sendHeartbeat();
