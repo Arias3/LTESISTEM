@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { useGeoStore } from '../../stores/geo';
+import { useAuthStore } from '../../stores/auth';
 import type { User, SensorDevice } from '../../stores/geo';
 import DeviceInfo from './DeviceInfo.vue';
+
+const API_URL = import.meta.env.VITE_API_URL;
 
 interface Props {
   marker: User | SensorDevice;
@@ -11,6 +14,7 @@ interface Props {
 const props = defineProps<Props>();
 
 const geoStore = useGeoStore();
+const authStore = useAuthStore();
 
 // Reverse geocoding
 const address = ref('Cargando dirección...');
@@ -27,9 +31,20 @@ const reverseGeocode = async (lat: number, lng: number) => {
   address.value = 'Cargando dirección...';
 
   try {
+    if (!API_URL) {
+      address.value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      return;
+    }
+
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
-      { headers: { 'Accept-Language': 'es' } }
+      `${API_URL}/api/geo/reverse-geocode?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`,
+      {
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          ...(authStore.getAuthHeaders() as Record<string, string>),
+        },
+      }
     );
 
     if (res.ok) {
@@ -56,9 +71,13 @@ const reverseGeocode = async (lat: number, lng: number) => {
 
 // Resolver dirección cuando cambia el marcador
 watch(
-  () => [props.marker.location.latitude, props.marker.location.longitude],
+  () => [props.marker.location?.latitude, props.marker.location?.longitude],
   ([lat, lng]) => {
-    reverseGeocode(lat as number, lng as number);
+    if (typeof lat === 'number' && typeof lng === 'number') {
+      reverseGeocode(lat, lng);
+    } else {
+      address.value = 'Sin ubicación registrada';
+    }
   },
   { immediate: true }
 );

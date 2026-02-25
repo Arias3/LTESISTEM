@@ -3,6 +3,10 @@ import { onMounted, onUnmounted, ref, computed } from 'vue';
 import { useGeoStore } from '../stores/geo';
 import GeoMap from '../components/geo/GeoMap.vue';
 import UsersList from '../components/geo/UsersList.vue';
+import DeviceManager from '../components/geo/DeviceManager.vue';
+
+// Sidebar tab
+const activeTab = ref<'users' | 'devices'>('users');
 
 const geoStore = useGeoStore();
 
@@ -32,7 +36,7 @@ onMounted(async () => {
     geoStore.initializeMockDevices();
     setInterval(() => {
       geoStore.users.forEach((user) => {
-        if (user.online) {
+        if (user.online && user.location) {
           user.location.latitude += (Math.random() - 0.5) * 0.001;
           user.location.longitude += (Math.random() - 0.5) * 0.001;
           user.timestamp = Date.now();
@@ -52,7 +56,14 @@ onUnmounted(() => {
   <div class="geo-view">
     <!-- ═══ DESKTOP: sidebar a la izquierda + mapa a la derecha ═══ -->
     <aside v-if="isDesktop" class="desktop-sidebar">
-      <UsersList />
+      <div class="sidebar-tabs">
+        <button class="tab-btn" :class="{ active: activeTab === 'users' }" @click="activeTab = 'users'">👥 Usuarios</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'devices' }" @click="activeTab = 'devices'">📡 Dispositivos</button>
+      </div>
+      <div class="sidebar-content">
+        <UsersList v-if="activeTab === 'users'" />
+        <DeviceManager v-else />
+      </div>
     </aside>
 
     <!-- ═══ MAPA (siempre visible, llena el espacio restante) ═══ -->
@@ -93,7 +104,12 @@ onUnmounted(() => {
           <div class="sheet-handle" @click="showPanel = false">
             <div class="handle-bar"></div>
           </div>
-          <UsersList @select-user="showPanel = false" />
+          <div class="sidebar-tabs">
+            <button class="tab-btn" :class="{ active: activeTab === 'users' }" @click="activeTab = 'users'">👥</button>
+            <button class="tab-btn" :class="{ active: activeTab === 'devices' }" @click="activeTab = 'devices'">📡</button>
+          </div>
+          <UsersList v-if="activeTab === 'users'" @select-user="showPanel = false" />
+          <DeviceManager v-else />
         </aside>
       </Transition>
 
@@ -122,6 +138,44 @@ onUnmounted(() => {
   flex-shrink: 0;
   background: rgba(15, 23, 42, 0.95);
   border-right: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Tab bar */
+.sidebar-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 8px 0;
+  flex-shrink: 0;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 8px 0;
+  border: none;
+  border-radius: 8px 8px 0 0;
+  background: rgba(255, 255, 255, 0.04);
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-btn.active {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+}
+
+.tab-btn:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.06);
+  color: #94a3b8;
+}
+
+.sidebar-content {
+  flex: 1;
   overflow: hidden;
   display: flex;
   flex-direction: column;

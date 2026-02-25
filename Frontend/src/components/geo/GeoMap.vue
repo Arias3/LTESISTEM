@@ -86,7 +86,8 @@ const updateMarkers = () => {
   const L = (window as any).L;
   if (!L || !map.value) return;
 
-  const currentIds = new Set(geoStore.allMarkers.map(m => m.id));
+  const validMarkers = geoStore.allMarkers.filter((m) => geoStore.hasValidLocation(m));
+  const currentIds = new Set(validMarkers.map(m => m.id));
 
   for (const [id, marker] of markers.value.entries()) {
     if (!currentIds.has(id)) {
@@ -95,7 +96,7 @@ const updateMarkers = () => {
     }
   }
 
-  geoStore.allMarkers.forEach((marker) => {
+  validMarkers.forEach((marker) => {
     const markerId = marker.id;
     const isUser = geoStore.isUser(marker);
     const isOnline = isUser ? marker.online : marker.status === 'online';
@@ -122,7 +123,7 @@ const updateMarkers = () => {
       });
 
       const leafletMarker = L.marker(
-        [marker.location.latitude, marker.location.longitude],
+        [marker.location!.latitude, marker.location!.longitude],
         { icon }
       )
         .addTo(map.value)
@@ -134,8 +135,8 @@ const updateMarkers = () => {
     } else {
       const leafletMarker = markers.value.get(markerId);
       const currentLatLng = leafletMarker.getLatLng();
-      if (currentLatLng.lat !== marker.location.latitude || currentLatLng.lng !== marker.location.longitude) {
-        leafletMarker.setLatLng([marker.location.latitude, marker.location.longitude]);
+      if (currentLatLng.lat !== marker.location!.latitude || currentLatLng.lng !== marker.location!.longitude) {
+        leafletMarker.setLatLng([marker.location!.latitude, marker.location!.longitude]);
       }
     }
   });
@@ -151,7 +152,7 @@ watch(
 watch(
   () => geoStore.selectedMarker,
   (selected) => {
-    if (selected && map.value) {
+    if (selected && selected.location && map.value) {
       map.value.setView(
         [selected.location.latitude, selected.location.longitude],
         Math.max(geoStore.mapZoom, 15),

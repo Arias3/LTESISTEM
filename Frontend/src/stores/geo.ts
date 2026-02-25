@@ -5,6 +5,7 @@ import { useAuthStore } from './auth';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
 const API_URL = import.meta.env.VITE_API_URL;
+const DEFAULT_CENTER: LocationCoordinates = { latitude: 11.019464, longitude: -74.851522 };
 
 // ================= INTERFACES =================
 
@@ -19,23 +20,27 @@ export interface User {
   name: string;
   username?: string;
   role: string;
-  location: LocationCoordinates;
+  location: LocationCoordinates | null;
   timestamp: number;
+  lastUpdate?: string | null;
   avatar?: string;
   online: boolean;
 }
 
 export interface SensorDevice {
   id: string;
+  deviceId?: string;          // hardware ID: "ESP32-XXXX"
   name: string;
-  type: string; // 'camera', 'sensor', 'gateway', 'beacon'
-  location: LocationCoordinates;
+  type: string;
+  location: LocationCoordinates | null;
   timestamp: number;
+  lastUpdate?: string;        // ISO date desde DB
   sensorData?: Record<string, any>;
-  values?: Record<string, any>; // Alias para compatibilidad
+  values?: Record<string, any>;
   icon?: string;
   status?: 'online' | 'offline';
   online?: boolean;
+  samplingInterval?: number;
 }
 
 export interface LocationTrack {
@@ -58,7 +63,7 @@ export const useGeoStore = defineStore('geo', () => {
   const userLocation = ref<LocationCoordinates | null>(null);
   const selectedMarker = ref<User | SensorDevice | null>(null);
   const mapZoom = ref(13);
-  const mapCenter = ref<LocationCoordinates>({ latitude: 11.018224, longitude: -74.850678 });
+  const mapCenter = ref<LocationCoordinates>(DEFAULT_CENTER);
 
   // Geo permission state
   const geoPermission = ref<PermissionState | 'unknown'>('unknown');
@@ -72,6 +77,22 @@ export const useGeoStore = defineStore('geo', () => {
 
   // Polling fallback para dispositivos (aún usan REST)
   let devicePollingInterval: ReturnType<typeof setInterval> | null = null;
+
+  const parseCoordinates = (location: any): LocationCoordinates | null => {
+    if (!location) return null;
+    const latitude = Number(location.latitude);
+    const longitude = Number(location.longitude);
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+    if (latitude === 0 && longitude === 0) return null;
+
+    return { latitude, longitude };
+  };
+
+  const hasValidLocation = (marker: User | SensorDevice): boolean => {
+    return Boolean(marker.location);
+  };
 
   // ================= SOCKET.IO =================
 
@@ -92,6 +113,7 @@ export const useGeoStore = defineStore('geo', () => {
 
     socket = io(SOCKET_URL, {
       withCredentials: true,
+      auth: authStore.getAuthHeaders() as Record<string, string>,
       transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: 10,
@@ -103,7 +125,6 @@ export const useGeoStore = defineStore('geo', () => {
     socket.on('connect', () => {
       console.log('📍 Geo socket conectado:', socket?.id);
 
-      // Registrarse en el gateway geo
       socket?.emit('geo:register', {
         userId: user.id,
         name: user.name,
@@ -113,8 +134,43 @@ export const useGeoStore = defineStore('geo', () => {
     });
 
     // Recibir ubicaciones de todos los usuarios
-    socket.on('geo:locations-update', (payload: User[]) => {
-      users.value = payload;
+    socket.on('geo:locations-update', (payload: any[]) => {
+      users.value = (Array.isArray(payload) ? payload : []).filter((user: any) => {
+        const username = String(user?.username || user?.name || '');
+        return !username.toUpperCase().startsWith('ESP32-');
+      }).map((user: any) => {
+        const location = parseCoordinates(user?.location);
+        const timestamp = Number(user?.timestamp);
+        return {
+          id: String(user?.id || user?.accountId || crypto.randomUUID()),
+          accountId: user?.accountId ? String(user.accountId) : undefined,
+          name: String(user?.name || user?.username || 'Usuario'),
+          username: user?.username ? String(user.username) : undefined,
+          role: String(user?.role || 'OPERATOR'),
+          location,
+          online: Boolean(user?.online),
+          timestamp: Number.isFinite(timestamp) ? timestamp : Date.now(),
+          lastUpdate: user?.lastUpdate ? String(user.lastUpdate) : null,
+        } as User;
+      });
+    });
+
+    // Recibir TODOS los dispositivos (online + offline) del backend
+    socket.on('device:data-update', (payload: any[]) => {
+      devices.value = (Array.isArray(payload) ? payload : []).map((d: any) => {
+        const location = parseCoordinates(d?.location);
+        const timestamp = Number(d?.timestamp);
+        return {
+          ...d,
+          id: String(d?.id || d?.deviceId || crypto.randomUUID()),
+          name: String(d?.name || d?.deviceId || 'Dispositivo'),
+          type: String(d?.type || 'sensor'),
+          location,
+          timestamp: Number.isFinite(timestamp) ? timestamp : Date.now(),
+          values: d?.sensorData || d?.values,
+          status: d?.online ? 'online' : 'offline',
+        } as SensorDevice;
+      });
     });
 
     socket.on('disconnect', (reason) => {
@@ -134,7 +190,7 @@ export const useGeoStore = defineStore('geo', () => {
     userLocation.value = { latitude: lat, longitude: lng };
 
     // Centrar mapa en la primera ubicación obtenida
-    if (!prevLocation || (prevLocation.latitude === 11.018224 && prevLocation.longitude === -74.850678)) {
+    if (!prevLocation || (prevLocation.latitude === DEFAULT_CENTER.latitude && prevLocation.longitude === DEFAULT_CENTER.longitude)) {
       mapCenter.value = { latitude: lat, longitude: lng };
     }
 
@@ -153,7 +209,7 @@ export const useGeoStore = defineStore('geo', () => {
     const prevLocation = userLocation.value;
     userLocation.value = { latitude: newLat, longitude: newLng };
 
-    if (!prevLocation || (prevLocation.latitude === 11.018224 && prevLocation.longitude === -74.850678)) {
+    if (!prevLocation || (prevLocation.latitude === DEFAULT_CENTER.latitude && prevLocation.longitude === DEFAULT_CENTER.longitude)) {
       mapCenter.value = { latitude: newLat, longitude: newLng };
     }
 
@@ -162,7 +218,7 @@ export const useGeoStore = defineStore('geo', () => {
     if (now - lastSentTime < SEND_INTERVAL_MS) return;
 
     // Filtrar: no enviar si el movimiento es menor a MIN_DISTANCE_M
-    if (prevLocation && prevLocation.latitude !== 11.018224) {
+    if (prevLocation && prevLocation.latitude !== DEFAULT_CENTER.latitude) {
       const dist = haversineDistance(prevLocation.latitude, prevLocation.longitude, newLat, newLng);
       if (dist < MIN_DISTANCE_M) return;
     }
@@ -306,15 +362,17 @@ export const useGeoStore = defineStore('geo', () => {
 
   const fetchDevices = async (): Promise<void> => {
     try {
-      const res = await fetch(`${API_URL}/api/geo/devices`, {
+      const res = await fetch(`${API_URL}/api/devices`, {
         credentials: 'include',
         headers: authStore.getAuthHeaders() as Record<string, string>,
       });
 
       if (res.ok) {
-        const data: SensorDevice[] = await res.json();
-        devices.value = data.map(device => ({
+        const data = await res.json();
+        const list: SensorDevice[] = data.devices || data;
+        devices.value = list.map(device => ({
           ...device,
+          location: parseCoordinates((device as any).location),
           values: device.sensorData || device.values,
           status: device.online ? 'online' : 'offline',
         }));
@@ -324,10 +382,46 @@ export const useGeoStore = defineStore('geo', () => {
     }
   };
 
+  const fetchUsers = async (): Promise<void> => {
+    try {
+      const res = await fetch(`${API_URL}/api/geo/users`, {
+        credentials: 'include',
+        headers: authStore.getAuthHeaders() as Record<string, string>,
+      });
+
+      if (res.ok) {
+        const list = await res.json();
+        users.value = (Array.isArray(list) ? list : []).filter((user: any) => {
+          const username = String(user?.username || user?.name || '');
+          return !username.toUpperCase().startsWith('ESP32-');
+        }).map((user: any) => ({
+          id: String(user?.id || user?.accountId || crypto.randomUUID()),
+          accountId: user?.accountId ? String(user.accountId) : undefined,
+          name: String(user?.name || user?.username || 'Usuario'),
+          username: user?.username ? String(user.username) : undefined,
+          role: String(user?.role || 'OPERATOR'),
+          location: parseCoordinates(user?.location),
+          online: Boolean(user?.online),
+          timestamp: Number.isFinite(Number(user?.timestamp)) ? Number(user.timestamp) : 0,
+          lastUpdate: user?.lastUpdate ? String(user.lastUpdate) : null,
+        }));
+      }
+    } catch (error) {
+      console.error('Error al cargar usuarios geo:', error);
+    }
+  };
+
   const startDevicePolling = async () => {
     stopDevicePolling();
+    // Cargar devices + inicializar socket geo
+    await fetchUsers();
     await fetchDevices();
-    devicePollingInterval = setInterval(fetchDevices, 15000); // cada 15s para devices
+    initGeoSocket();
+    // Polling de respaldo cada 30s (socket es la fuente primaria)
+    devicePollingInterval = setInterval(() => {
+      fetchUsers();
+      fetchDevices();
+    }, 30_000);
   };
 
   const stopDevicePolling = () => {
@@ -354,7 +448,7 @@ export const useGeoStore = defineStore('geo', () => {
           },
           () => {
             if (!userLocation.value) {
-              userLocation.value = { latitude: 11.018224, longitude: -74.850678 };
+              userLocation.value = { ...DEFAULT_CENTER };
               mapCenter.value = userLocation.value;
             }
             resolve();
@@ -362,7 +456,7 @@ export const useGeoStore = defineStore('geo', () => {
           { timeout: 10000, enableHighAccuracy: true }
         );
       } else {
-        userLocation.value = { latitude: 11.018224, longitude: -74.850678 };
+        userLocation.value = { ...DEFAULT_CENTER };
         mapCenter.value = userLocation.value;
         resolve();
       }
@@ -377,7 +471,7 @@ export const useGeoStore = defineStore('geo', () => {
         id: 'user-1',
         name: 'Juan Carlos',
         role: 'Administrador',
-        location: { latitude: 11.018224, longitude: -74.850678 },
+        location: { latitude: 11.019464, longitude: -74.851522 },
         timestamp: Date.now(),
         online: true,
       },
@@ -516,6 +610,7 @@ export const useGeoStore = defineStore('geo', () => {
     
     // Devices (REST polling)
     fetchDevices,
+    fetchUsers,
     startDevicePolling,
     stopDevicePolling,
     
@@ -533,5 +628,6 @@ export const useGeoStore = defineStore('geo', () => {
     setMapCenter,
     isUser,
     isDevice,
+    hasValidLocation,
   };
 });

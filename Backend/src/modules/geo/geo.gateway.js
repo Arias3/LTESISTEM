@@ -15,31 +15,43 @@ export default function initGeoGateway(io) {
 
   // userId → timeoutId  (debounce para persistencia en DB)
   const persistTimers = new Map();
+  const userSockets = new Map();
 
   const PERSIST_DELAY_MS = 30_000; // 30 segundos
 
-  /** Construye el array de usuarios activos para broadcast */
-  function buildLocationsPayload() {
-    const locations = [];
-    for (const [userId, data] of geoUsers.entries()) {
-      // Solo incluir usuarios online con ubicación válida (no 0,0)
-      if (data.online && (data.latitude !== 0 || data.longitude !== 0)) {
-        locations.push({
-          id: data.geoId || userId,
-          accountId: userId,
-          name: data.name,
-          username: data.username,
-          role: data.role,
-          location: {
-            latitude: data.latitude,
-            longitude: data.longitude,
-          },
-          online: true,
-          timestamp: data.timestamp,
-        });
-      }
+  /** Construye y emite snapshot completo de usuarios (online + offline) */
+  async function broadcastUsersSnapshot() {
+    try {
+      const usersFromDb = await GeoService.getUsers(true);
+
+      const payload = usersFromDb.map((dbUser) => {
+        const userId = dbUser.accountId;
+        const live = geoUsers.get(userId);
+        const hasLiveLocation =
+          live &&
+          live.latitude !== 0 &&
+          live.longitude !== 0;
+
+        return {
+          ...dbUser,
+          location: hasLiveLocation
+            ? {
+                latitude: live.latitude,
+                longitude: live.longitude,
+              }
+            : dbUser.location,
+          online: live ? Boolean(live.online) : Boolean(dbUser.online),
+          timestamp: live ? live.timestamp : dbUser.timestamp,
+          lastUpdate: live
+            ? new Date(live.timestamp).toISOString()
+            : dbUser.lastUpdate,
+        };
+      });
+
+      io.emit("geo:locations-update", payload);
+    } catch (error) {
+      console.error("❌ Error en broadcastUsersSnapshot:", error.message);
     }
-    return locations;
   }
 
   /** Persiste la ubicación en PostgreSQL con debounce */
@@ -69,6 +81,8 @@ export default function initGeoGateway(io) {
       if (!userId) return;
 
       socket.geoUserId = userId;
+      if (!userSockets.has(userId)) userSockets.set(userId, new Set());
+      userSockets.get(userId).add(socket.id);
 
       // Inicializar en el Map (sin ubicación aún)
       if (!geoUsers.has(userId)) {
@@ -94,8 +108,8 @@ export default function initGeoGateway(io) {
 
       console.log(`📍 Geo: usuario registrado ${username} (${userId})`);
 
-      // Enviarle la ubicación actual de todos
-      socket.emit("geo:locations-update", buildLocationsPayload());
+      // Enviarle el snapshot completo y actualizar a todos
+      broadcastUsersSnapshot();
     });
 
     /* ========= GEO UPDATE LOCATION ========= */
@@ -117,8 +131,8 @@ export default function initGeoGateway(io) {
       userData.online = true;
       userData.timestamp = Date.now();
 
-      // Broadcast a todos los clientes conectados
-      io.emit("geo:locations-update", buildLocationsPayload());
+      // Broadcast snapshot completo
+      broadcastUsersSnapshot();
 
       // Persistir con debounce
       debouncedPersist(userId, latitude, longitude);
@@ -129,6 +143,19 @@ export default function initGeoGateway(io) {
       const userId = socket.geoUserId;
       if (!userId) return;
 
+      const sockets = userSockets.get(userId);
+      if (sockets) {
+        sockets.delete(socket.id);
+        if (sockets.size === 0) {
+          userSockets.delete(userId);
+        }
+      }
+
+      // Si el usuario aún tiene otra pestaña/socket conectado, no marcar offline
+      if (userSockets.has(userId)) {
+        return;
+      }
+
       const userData = geoUsers.get(userId);
       if (userData) {
         userData.online = false;
@@ -137,7 +164,7 @@ export default function initGeoGateway(io) {
         console.log(`📍 Geo: usuario desconectado ${userData.username} (${userId})`);
 
         // Broadcast actualizado (usuario aparecerá offline)
-        io.emit("geo:locations-update", buildLocationsPayload());
+        broadcastUsersSnapshot();
 
         // Persistir inmediatamente el estado offline
         // Limpiar timer de debounce pendiente

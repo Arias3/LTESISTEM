@@ -5,6 +5,20 @@ import jwt from "jsonwebtoken";
 const SALT_ROUNDS = 10;
 const JWT_SECRET = process.env.JWT_SECRET || "default-secret"; // Use env var in production
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "1h";
+const ALLOWED_USER_ROLES = ["ADMIN", "OPERATOR"];
+
+function normalizeUserRole(role) {
+  if (role === undefined || role === null || String(role).trim() === "") {
+    return "OPERATOR";
+  }
+
+  const raw = String(role).trim().toUpperCase();
+  const normalized = raw === "OPERADOR" ? "OPERATOR" : raw;
+  if (!ALLOWED_USER_ROLES.includes(normalized)) {
+    throw new Error("Rol inválido. Solo se permite ADMIN u OPERATOR");
+  }
+  return normalized;
+}
 
 export async function getUsers() {
   return prisma.user.findMany({
@@ -32,13 +46,18 @@ export async function getUserById(id) {
 }
 
 export async function createUser({ name, username, password, role }) {
+  if (!name || !username || !password) {
+    throw new Error("name, username y password son requeridos");
+  }
+
   const exists = await prisma.user.findUnique({ where: { username } });
   if (exists) throw new Error("Este usuario ya existe");
 
   const hashed = await bcrypt.hash(password, SALT_ROUNDS);
+  const normalizedRole = normalizeUserRole(role);
 
   return prisma.user.create({
-    data: { name, username, password: hashed, role },
+    data: { name, username, password: hashed, role: normalizedRole },
     select: {
       id: true,
       name: true,
@@ -54,6 +73,10 @@ export async function updateUser(id, data) {
 
   if (payload.password) {
     payload.password = await bcrypt.hash(payload.password, SALT_ROUNDS);
+  }
+
+  if (payload.role !== undefined) {
+    payload.role = normalizeUserRole(payload.role);
   }
 
   return prisma.user.update({
@@ -106,6 +129,37 @@ export async function loginBasic({ username, password }) {
     },
     token
   };
+}
+
+export async function registerOrUpdateDeviceRecord({ deviceId, ipAddress }) {
+  const existing = await prisma.device.findUnique({
+    where: { deviceId },
+  });
+
+  if (existing) {
+    return prisma.device.update({
+      where: { id: existing.id },
+      data: {
+        displayName: existing.displayName || deviceId,
+        ipAddress: ipAddress || existing.ipAddress,
+        status: "ACTIVE",
+      },
+    });
+  }
+
+  return prisma.device.create({
+    data: {
+      deviceId,
+      displayName: deviceId,
+      ipAddress: ipAddress || "0.0.0.0",
+      status: "ACTIVE",
+      samplingInterval: 5,
+      sensors: {
+        type: "pir",
+        mode: "serial-sim",
+      },
+    },
+  });
 }
 
 export async function logout(req) {

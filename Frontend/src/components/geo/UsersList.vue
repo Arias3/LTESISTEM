@@ -32,6 +32,7 @@ const getInitials = (name: string): string => {
 };
 
 const timeAgo = (timestamp: number): string => {
+  if (!timestamp || timestamp <= 0) return 'sin datos';
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
   if (seconds < 60) return 'ahora';
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
@@ -40,26 +41,19 @@ const timeAgo = (timestamp: number): string => {
 };
 
 const handleSelect = (user: User) => {
+  if (!user.location) return;
   geoStore.selectMarker(user);
   emit('select-user');
+};
+
+const formatLocation = (user: User): string => {
+  if (!user.location) return 'Sin ubicación registrada';
+  return `${user.location.latitude.toFixed(5)}, ${user.location.longitude.toFixed(5)}`;
 };
 </script>
 
 <template>
   <div class="users-panel">
-    <div class="panel-header">
-      <h3>
-        <span class="header-icon">👥</span>
-        Usuarios
-      </h3>
-      <div class="header-badges">
-        <span class="badge online-badge">
-          <span class="badge-dot"></span>
-          {{ geoStore.onlineUsers.length }}
-        </span>
-        <span class="badge total-badge">{{ geoStore.users.length }} total</span>
-      </div>
-    </div>
 
     <!-- Search / filter -->
     <div class="panel-search">
@@ -91,6 +85,7 @@ const handleSelect = (user: User) => {
               <span class="separator">·</span>
               <span class="time">{{ timeAgo(user.timestamp) }}</span>
             </span>
+            <span class="user-location">{{ formatLocation(user) }}</span>
           </div>
 
           <div class="user-location-indicator" v-if="user.online">
@@ -101,8 +96,8 @@ const handleSelect = (user: User) => {
 
       <div v-if="geoStore.users.length === 0" class="empty-state">
         <div class="empty-icon">📍</div>
-        <p>Sin usuarios activos</p>
-        <span>Los usuarios aparecerán aquí al conectarse</span>
+        <p>Sin usuarios registrados</p>
+        <span>Se mostrarán online/offline con su última ubicación</span>
       </div>
     </div>
   </div>
@@ -296,6 +291,14 @@ const handleSelect = (user: User) => {
 
 .separator { color: #475569; }
 .time { color: #64748b; }
+
+.user-location {
+  font-size: 0.68rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* Location indicator */
 .user-location-indicator {

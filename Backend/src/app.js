@@ -134,7 +134,14 @@ const frontendOrigins = process.env.FRONTEND_ORIGINS
 
 const io = new Server(server, {
   cors: {
-    origin: frontendOrigins,
+    // Acepta frontends conocidos + ESP32 (sin Origin header)
+    origin: (origin, callback) => {
+      if (!origin || frontendOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, true); // Permisivo para dispositivos IoT
+      }
+    },
     credentials: true
   }
 });
@@ -146,5 +153,13 @@ initCallGateway(io);
 /* ================= GEO GATEWAY ================= */
 import initGeoGateway from "./modules/geo/geo.gateway.js";
 initGeoGateway(io);
+
+/* ================= DEVICE GATEWAY (ESP32) ================= */
+import initDeviceGateway from "./modules/geo/device.gateway.js";
+initDeviceGateway(io);
+
+/* ================= DEVICE REST ROUTES ================= */
+import deviceRoutes from "./modules/geo/device.routes.js";
+app.use("/api/devices", deviceRoutes);
 
 export { app, server };
