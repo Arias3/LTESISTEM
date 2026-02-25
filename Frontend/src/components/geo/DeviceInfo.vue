@@ -30,11 +30,30 @@ const formatLabel = (key: string): string => {
 };
 
 const formatValue = (value: any): string => {
+  // Manejar objetos (como PIR sensor)
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    // Si es un sensor PIR
+    if ('detected' in value || 'value' in value) {
+      const pirValue = value.detected ?? value.value;
+      if (typeof pirValue === 'boolean' || pirValue === 0 || pirValue === 1) {
+        return pirValue ? '✅ ACTIVADO' : '❌ DESACTIVADO';
+      }
+      return String(pirValue);
+    }
+    // Para otros objetos, intentar extraer un valor principal
+    if ('value' in value) return String(value.value);
+    if ('reading' in value) return String(value.reading);
+    return '[Datos complejos]';
+  }
+  
   if (typeof value === 'boolean') {
     return value ? 'Sí' : 'No';
   }
   if (typeof value === 'number') {
     return value.toFixed(1);
+  }
+  if (value === null || value === undefined) {
+    return '-';
   }
   return String(value);
 };

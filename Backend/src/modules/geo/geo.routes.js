@@ -22,6 +22,53 @@ router.get("/users", async (req, res) => {
 });
 
 /**
+ * GET /api/geo/reverse-geocode?lat=..&lng=..
+ * Proxy server-side para geocodificación inversa (evita CORS en frontend)
+ */
+router.get("/reverse-geocode", async (req, res) => {
+  try {
+    const lat = Number(req.query.lat);
+    const lng = Number(req.query.lng);
+
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+      return res.status(400).json({ error: "Latitud inválida" });
+    }
+    if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+      return res.status(400).json({ error: "Longitud inválida" });
+    }
+
+    const url = new URL("https://nominatim.openstreetmap.org/reverse");
+    url.searchParams.set("format", "json");
+    url.searchParams.set("lat", String(lat));
+    url.searchParams.set("lon", String(lng));
+    url.searchParams.set("zoom", "18");
+    url.searchParams.set("addressdetails", "1");
+
+    const upstream = await fetch(url, {
+      headers: {
+        "Accept": "application/json",
+        "Accept-Language": "es",
+        "User-Agent": "LTESISTEM/1.0 (geo reverse proxy)",
+      },
+    });
+
+    if (!upstream.ok) {
+      const text = await upstream.text();
+      return res.status(502).json({
+        error: "Error de geocodificación externa",
+        details: text?.slice(0, 200) || `HTTP ${upstream.status}`,
+      });
+    }
+
+    const data = await upstream.json();
+    res.json(data);
+  } catch (error) {
+    console.error("Error en reverse-geocode:", error);
+    res.status(500).json({ error: "Error en reverse-geocode" });
+  }
+});
+
+/**
  * POST /api/geo/users/location
  * Actualiza la ubicación de un usuario
  * Body: { accountId, latitude, longitude }

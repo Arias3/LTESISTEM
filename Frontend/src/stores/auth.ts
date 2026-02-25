@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useCallStore } from './call'
+import { useGeoStore } from './geo'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<any>(null)
@@ -48,6 +49,11 @@ export const useAuthStore = defineStore('auth', () => {
       const call = useCallStore()
       call.disconnect()
       console.log('📞 Socket de llamadas desconectado')
+
+      // 📍 DESCONECTAR GEO TRACKING
+      const geo = useGeoStore()
+      geo.stopTracking()
+      console.log('📍 Geo tracking detenido')
       
       user.value = null
       token.value = null
@@ -107,6 +113,24 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // 📍 Inicializar geo tracking
+  const initGeoTracking = () => {
+    if (!user.value) {
+      console.warn('⚠️ No se puede inicializar geo sin usuario autenticado')
+      return
+    }
+
+    const geo = useGeoStore()
+    geo.initGeoSocket()
+
+    // Si el permiso ya fue concedido, iniciar tracking inmediatamente
+    geo.checkGeoPermission().then((state) => {
+      if (state === 'granted') {
+        geo.startTracking()
+      }
+    })
+  }
+
   // Helper function to get auth headers for API calls
   const getAuthHeaders = () => {
     return token.value ? { 'Authorization': `Bearer ${token.value}` } : {}
@@ -124,6 +148,7 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     checkAuth,
     initCallSocket,
+    initGeoTracking,
     getAuthHeaders,
     setUser,
   }
