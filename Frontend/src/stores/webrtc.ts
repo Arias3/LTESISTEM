@@ -10,6 +10,9 @@ export const useWebRTCStore = defineStore("webrtc", {
 
     // callback que el call store registrará
     onIceCandidate: null as ((candidate: RTCIceCandidate) => void) | null,
+
+    // Buffer para ICE candidates que llegan antes de que remoteDescription esté listo
+    pendingIceCandidates: [] as RTCIceCandidateInit[],
   }),
 
   actions: {
@@ -29,10 +32,10 @@ export const useWebRTCStore = defineStore("webrtc", {
           video:
             mode === "video"
               ? {
-                  width: { ideal: 1280 },
-                  height: { ideal: 720 },
-                  facingMode: "user",
-                }
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                facingMode: "user",
+              }
               : false,
         };
 
@@ -74,21 +77,22 @@ export const useWebRTCStore = defineStore("webrtc", {
         });
 
         /* 📥 REMOTE STREAM */
+        // No crear stream vacío aquí: se asigna en ontrack cuando ya tiene tracks,
+        // para que Vue reactive dispare el watcher con el stream completo.
+
         pc.ontrack = (event) => {
           console.log("📥 Track remoto recibido:", event.track.kind);
-          // Crear un nuevo MediaStream con todos los tracks para que Pinia detecte el cambio
-          const newStream = new MediaStream();
-          // Agregar tracks existentes
-          this.remoteStream?.getTracks().forEach((t) => newStream.addTrack(t));
-          // Agregar nuevos tracks
-          event.streams[0]?.getTracks().forEach((track) => {
-            if (!newStream.getTrackById(track.id)) {
-              console.log("➕ Añadiendo track remoto:", track.kind, track.id);
-              newStream.addTrack(track);
-            }
-          });
-          // Reasignar para que Pinia detecte el cambio de referencia
-          this.remoteStream = newStream;
+
+          // Siempre crear un nuevo MediaStream para forzar que Vue re-dispare el
+          // watcher en cada track (audio Y video). Si se reutiliza la misma
+          // referencia, Vue no detecta el cambio y el <video> no hace play().
+          if (event.streams && event.streams[0]) {
+            this.remoteStream = new MediaStream(event.streams[0].getTracks());
+          } else {
+            const prevTracks = this.remoteStream?.getTracks() ?? [];
+            this.remoteStream = new MediaStream([...prevTracks, event.track]);
+          }
+          console.log("📥 remoteStream actualizado, tracks:", this.remoteStream.getTracks().length);
         };
 
         /* ❄ ICE - CON LOGS DETALLADOS */
@@ -115,12 +119,36 @@ export const useWebRTCStore = defineStore("webrtc", {
 
         console.log("✅ PeerConnection configurada correctamente");
       } catch (error) {
-        console.error("❌ Error obteniendo medios:", error);
+        const err = error as Error;
+        console.error("❌ Error obteniendo medios:", err.name, err.message);
 
-        // Intentar con configuración más simple si falla
+        // ── Permiso denegado o contexto no seguro (sin HTTPS / CA no instalada)
+        if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+          const msg =
+            "❌ Permiso de cámara/micrófono denegado.\n\n" +
+            "Causas posibles:\n" +
+            "• El certificado SSL no está instalado en este dispositivo.\n" +
+            "• El navegador bloqueó el permiso manualmente.\n\n" +
+            "Solución: instala el archivo ltesistem-ca.crt como CA de confianza " +
+            "y recarga la página.";
+          alert(msg);
+          throw err; // propaga para que call.ts haga rejectCall / resetCall
+        }
+
+        // ── Contexto no seguro (acceso desde HTTP en vez de HTTPS)
+        if (err.name === "SecurityError") {
+          alert(
+            "❌ El navegador bloqueó el acceso a cámara/micrófono porque " +
+            "la conexión no es segura (HTTP).\n\n" +
+            `Accede al sistema usando HTTPS: https://${import.meta.env.VITE_HOST}:4000`
+          );
+          throw err;
+        }
+
+        // ── Dispositivo no encontrado → intentar configuración mínima
         if (
-          (error as Error).name === "NotFoundError" ||
-          (error as Error).name === "DevicesNotFoundError"
+          err.name === "NotFoundError" ||
+          err.name === "DevicesNotFoundError"
         ) {
           console.log("🔄 Intentando con configuración mínima...");
           try {
@@ -136,7 +164,7 @@ export const useWebRTCStore = defineStore("webrtc", {
             throw fallbackError;
           }
         } else {
-          throw error;
+          throw err;
         }
       }
     },
@@ -153,6 +181,7 @@ export const useWebRTCStore = defineStore("webrtc", {
       this.localStream = null;
       this.remoteStream = null;
       this.onIceCandidate = null;
+      this.pendingIceCandidates = [];
     },
   },
 });

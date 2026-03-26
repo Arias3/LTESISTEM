@@ -65,6 +65,16 @@
         <p v-if="confirmError" class="error">{{ confirmError }}</p>
       </div>
 
+      <!-- Rol -->
+      <div class="field">
+        <label>Rol</label>
+        <select v-model="role">
+          <option value="OPERATOR">OPERADOR</option>
+          <option value="ADMIN">ADMIN</option>
+        </select>
+        <p v-if="roleError" class="error">{{ roleError }}</p>
+      </div>
+
       <button class="btn login-btn" :disabled="!isValid" @click="register">
         Registrarse
       </button>
@@ -87,6 +97,7 @@ const name = ref("");
 const username = ref("");
 const password = ref("");
 const confirmPassword = ref("");
+const role = ref<"ADMIN" | "OPERATOR">("OPERATOR");
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -125,12 +136,20 @@ const confirmError = computed(() => {
   return "";
 });
 
+const roleError = computed(() => {
+  if (!["ADMIN", "OPERATOR"].includes(role.value)) {
+    return "Rol inválido";
+  }
+  return "";
+});
+
 const isValid = computed(() => {
   return (
     !nameError.value &&
     !usernameValidationError.value &&
     !passwordError.value &&
-    !confirmError.value
+    !confirmError.value &&
+    !roleError.value
   );
 });
 
@@ -145,6 +164,7 @@ const register = async () => {
         name: name.value,
         username: username.value,
         password: password.value,
+        role: role.value,
       }),
     });
 
@@ -237,6 +257,17 @@ const register = async () => {
 }
 
 .field input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: none;
+  outline: none;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.field select {
   width: 100%;
   box-sizing: border-box;
   margin-top: 6px;

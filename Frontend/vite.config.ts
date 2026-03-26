@@ -1,25 +1,41 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { VitePWA } from "vite-plugin-pwa";
 import fs from "fs";
 import path from "path";
 
-const certsDir = path.resolve(__dirname, "..", "certs");
-const certFile = path.join(certsDir, "cert.pem");
-const keyFile = path.join(certsDir, "key.pem");
-const useSSL = fs.existsSync(certFile) && fs.existsSync(keyFile);
+// ── Certificados SSL ─────────────────────────────────────────
+// Los archivos los genera generate-ssl.sh en la raíz del proyecto.
+const ROOT = path.resolve(__dirname, "..");
+const SSL_CERT = path.join(ROOT, "ssl", "ltesistem.crt");
+const SSL_KEY = path.join(ROOT, "ssl", "ltesistem.key");
 
-export default defineConfig({
+const httpsConfig =
+  fs.existsSync(SSL_CERT) && fs.existsSync(SSL_KEY)
+    ? { cert: fs.readFileSync(SSL_CERT), key: fs.readFileSync(SSL_KEY) }
+    : undefined; // fallback HTTP si aún no se generaron los certs
+
+if (httpsConfig) {
+  console.log("🔐  Vite: HTTPS activado con certificado SSL local");
+} else {
+  console.warn("⚠️   Vite: certificados no encontrados → corriendo en HTTP");
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  const HOST = env.VITE_HOST || "0.0.0.0";
+
+  return {
   server: {
-    host: "0.0.0.0",
+    host: HOST,
     port: 4000,
-    ...(useSSL && {
-      https: {
-        cert: fs.readFileSync(certFile),
-        key: fs.readFileSync(keyFile),
-      },
-    }),
+    https: httpsConfig,
+    hmr: {
+      protocol: "wss",
+      host: "ltesistem.local",
+    },
   },
+
   plugins: [
     vue(),
     VitePWA({
@@ -45,4 +61,5 @@ export default defineConfig({
       },
     }),
   ],
+  };
 });
