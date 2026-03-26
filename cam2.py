@@ -7,8 +7,8 @@ import threading
 import numpy as np
 
 USER = "admin"
-PASSWORD = "52418565"
-IP = "192.168.1.15"
+PASSWORD = "Admincelular1"
+IP = "192.168.0.2"
 
 URL_MAIN = f"rtsp://{USER}:{PASSWORD}@{IP}:554/h264Preview_01_main"
 URL_SUB  = f"rtsp://{USER}:{PASSWORD}@{IP}:554/h264Preview_01_sub"

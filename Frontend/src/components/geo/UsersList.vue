@@ -1,40 +1,45 @@
 <script setup lang="ts">
-import { useGeoStore } from '../../stores/geo';
-import { computed } from 'vue';
-import type { User } from '../../stores/geo';
+import { useGeoStore } from "../../stores/geo";
+import { computed } from "vue";
+import type { User } from "../../stores/geo";
 
 const geoStore = useGeoStore();
-const emit = defineEmits(['select-user']);
+const emit = defineEmits(["select-user"]);
 
 const sortedUsers = computed(() => {
   return [...geoStore.users].sort((a, b) => {
     if (a.online && !b.online) return -1;
     if (!a.online && b.online) return 1;
-    return b.timestamp - a.timestamp;
+    return a.name.localeCompare(b.name);
   });
 });
 
 const getRoleColor = (role: string): string => {
   const colors: Record<string, string> = {
-    ADMIN: '#8b5cf6',
-    Administrador: '#8b5cf6',
-    OPERATOR: '#3b82f6',
-    Técnico: '#06b6d4',
-    Monitor: '#10b981',
-    MOBILE: '#f59e0b',
-    Usuario: '#3b82f6',
+    ADMIN: "#8b5cf6",
+    Administrador: "#8b5cf6",
+    OPERATOR: "#3b82f6",
+    Técnico: "#06b6d4",
+    Monitor: "#10b981",
+    MOBILE: "#f59e0b",
+    Usuario: "#3b82f6",
   };
-  return colors[role] || '#3b82f6';
+  return colors[role] || "#3b82f6";
 };
 
 const getInitials = (name: string): string => {
-  return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 };
 
 const timeAgo = (timestamp: number): string => {
-  if (!timestamp || timestamp <= 0) return 'sin datos';
+  if (!timestamp || timestamp <= 0) return "sin datos";
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return 'ahora';
+  if (seconds < 60) return "ahora";
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
   return `${Math.floor(seconds / 86400)}d`;
@@ -43,18 +48,17 @@ const timeAgo = (timestamp: number): string => {
 const handleSelect = (user: User) => {
   if (!user.location) return;
   geoStore.selectMarker(user);
-  emit('select-user');
+  emit("select-user");
 };
 
 const formatLocation = (user: User): string => {
-  if (!user.location) return 'Sin ubicación registrada';
+  if (!user.location) return "Sin ubicación registrada";
   return `${user.location.latitude.toFixed(5)}, ${user.location.longitude.toFixed(5)}`;
 };
 </script>
 
 <template>
   <div class="users-panel">
-
     <!-- Search / filter -->
     <div class="panel-search">
       <span class="search-icon">🔍</span>
@@ -69,11 +73,16 @@ const formatLocation = (user: User): string => {
           class="user-card"
           :class="{
             active: geoStore.selectedMarker?.id === user.id,
-            offline: !user.online
+            offline: !user.online,
           }"
           @click="handleSelect(user)"
         >
-          <div class="user-avatar" :style="{ background: `linear-gradient(135deg, ${getRoleColor(user.role)}, ${getRoleColor(user.role)}cc)` }">
+          <div
+            class="user-avatar"
+            :style="{
+              background: `linear-gradient(135deg, ${getRoleColor(user.role)}, ${getRoleColor(user.role)}cc)`,
+            }"
+          >
             {{ getInitials(user.name) }}
             <span class="avatar-status" :class="{ online: user.online }"></span>
           </div>
@@ -81,7 +90,11 @@ const formatLocation = (user: User): string => {
           <div class="user-details">
             <span class="user-name">{{ user.name }}</span>
             <span class="user-meta">
-              <span class="role-tag" :style="{ color: getRoleColor(user.role) }">{{ user.role }}</span>
+              <span
+                class="role-tag"
+                :style="{ color: getRoleColor(user.role) }"
+                >{{ user.role }}</span
+              >
               <span class="separator">·</span>
               <span class="time">{{ timeAgo(user.timestamp) }}</span>
             </span>
@@ -129,7 +142,9 @@ const formatLocation = (user: User): string => {
   gap: 8px;
 }
 
-.header-icon { font-size: 1rem; }
+.header-icon {
+  font-size: 1rem;
+}
 
 .header-badges {
   display: flex;
@@ -178,8 +193,14 @@ const formatLocation = (user: User): string => {
   cursor: pointer;
 }
 
-.search-icon { font-size: 0.8rem; opacity: 0.5; }
-.search-placeholder { font-size: 0.8rem; color: #64748b; }
+.search-icon {
+  font-size: 0.8rem;
+  opacity: 0.5;
+}
+.search-placeholder {
+  font-size: 0.8rem;
+  color: #64748b;
+}
 
 /* Users grid */
 .users-scroll {
@@ -289,8 +310,12 @@ const formatLocation = (user: User): string => {
   letter-spacing: 0.3px;
 }
 
-.separator { color: #475569; }
-.time { color: #64748b; }
+.separator {
+  color: #475569;
+}
+.time {
+  color: #64748b;
+}
 
 .user-location {
   font-size: 0.68rem;
@@ -319,8 +344,13 @@ const formatLocation = (user: User): string => {
 }
 
 @keyframes locPulse {
-  0%, 100% { box-shadow: 0 0 8px rgba(59, 130, 246, 0.5); }
-  50% { box-shadow: 0 0 16px rgba(59, 130, 246, 0.8); }
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(59, 130, 246, 0.8);
+  }
 }
 
 /* Empty state */
@@ -352,20 +382,44 @@ const formatLocation = (user: User): string => {
 }
 
 /* Scrollbar */
-.users-scroll::-webkit-scrollbar { width: 4px; }
-.users-scroll::-webkit-scrollbar-track { background: transparent; }
-.users-scroll::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.15); border-radius: 2px; }
-.users-scroll::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.25); }
+.users-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.users-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.users-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 2px;
+}
+.users-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.25);
+}
 
 /* List animation */
-.user-list-enter-active { transition: all 0.3s ease; }
-.user-list-leave-active { transition: all 0.2s ease; }
-.user-list-enter-from { opacity: 0; transform: translateX(-20px); }
-.user-list-leave-to { opacity: 0; transform: translateX(20px); }
+.user-list-enter-active {
+  transition: all 0.3s ease;
+}
+.user-list-leave-active {
+  transition: all 0.2s ease;
+}
+.user-list-enter-from {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+.user-list-leave-to {
+  opacity: 0;
+  transform: translateX(20px);
+}
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 @media (max-width: 768px) {

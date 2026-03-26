@@ -182,6 +182,8 @@ export default function initDeviceGateway(io) {
       const deviceId = socket.deviceId;
       if (!deviceId || !sensorData) return;
 
+      console.log(`[SENSOR UPDATE] Device ${deviceId} sent data:`, JSON.stringify(sensorData));
+
       const live = connectedDevices.get(deviceId);
       if (!live) return;
       if (live.socketId !== socket.id) return;

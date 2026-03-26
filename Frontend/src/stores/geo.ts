@@ -72,7 +72,7 @@ export const useGeoStore = defineStore('geo', () => {
   let socket: Socket | null = null;
   let watchId: number | null = null;
   let lastSentTime = 0;
-  const SEND_INTERVAL_MS = 10_000; // Enviar ubicación cada 10s máximo
+  const SEND_INTERVAL_MS = 2_000; // Enviar ubicación cada 2s máximo
   const MIN_DISTANCE_M = 5; // No enviar si movimiento < 5m
 
   // Polling fallback para dispositivos (aún usan REST)
@@ -144,6 +144,7 @@ export const useGeoStore = defineStore('geo', () => {
 
     // Recibir ubicaciones de todos los usuarios
     socket.on('geo:locations-update', (payload: any[]) => {
+      console.log('⚡ [SOCKET] geo:locations-update recibido:', payload?.length, 'usuarios');
       users.value = (Array.isArray(payload) ? payload : []).filter((user: any) => {
         const username = String(user?.username || user?.name || '');
         return !username.toUpperCase().startsWith('ESP32-');
@@ -166,6 +167,7 @@ export const useGeoStore = defineStore('geo', () => {
 
     // Recibir TODOS los dispositivos (online + offline) del backend
     socket.on('device:data-update', (payload: any[]) => {
+      console.log('⚡ [SOCKET] device:data-update recibido:', payload?.length, 'dispositivos');
       devices.value = (Array.isArray(payload) ? payload : []).map((d: any) => {
         const location = parseCoordinates(d?.location);
         const timestamp = Number(d?.timestamp);

@@ -39,7 +39,7 @@ const allDevices = computed(() => {
   return [...connectedDevices.value].sort((a, b) => {
     if (a.status === "online" && b.status !== "online") return -1;
     if (a.status !== "online" && b.status === "online") return 1;
-    return (b.timestamp || 0) - (a.timestamp || 0);
+    return a.name.localeCompare(b.name);
   });
 });
 const onlineCount = computed(
