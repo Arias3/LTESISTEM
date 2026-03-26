@@ -6,22 +6,24 @@ interface NodeStats {
   id: string;
   name: string;
   status: 'active' | 'inactive';
-  transmitPower: number; // dBm
-  downloadFrequency: number; // MHz
-  uploadFrequency: number; // MHz
+  transmitPower: number | null;
+  downloadFrequency: number | null;
+  uploadFrequency: number | null;
   throughput: {
-    download: number; // Mbps
-    upload: number; // Mbps
+    download: number | null;
+    upload: number | null;
   };
+  totalDlUsers: number | null;
+  totalUlUsers: number | null;
   gpsLocation: {
-    latitude: number;
-    longitude: number;
-    altitude: number; // metros
+    latitude: number | null;
+    longitude: number | null;
+    altitude: number | null;
   };
-  signalQuality: number; // 0-100
-  uptime: number; // segundos
-  temperature: number; // °C
-  lastUpdate: number; // timestamp
+  signalQuality: number;
+  uptime: number;
+  temperature: number;
+  lastUpdate: number;
 }
 
 // Estado
@@ -29,20 +31,22 @@ const nodeStats = ref<NodeStats>({
   id: 'NODE-001',
   name: 'Nodo Central Santa Marta',
   status: 'active',
-  transmitPower: 23.5,
-  downloadFrequency: 2450,
-  uploadFrequency: 2450,
+  transmitPower: null,
+  downloadFrequency: null,
+  uploadFrequency: null,
   throughput: {
-    download: 145.2,
-    upload: 98.7,
+    download: null,
+    upload: null,
   },
   gpsLocation: {
-    latitude: 11.018224,
-    longitude: -74.850678,
-    altitude: 12,
+    latitude: null,
+    longitude: null,
+    altitude: null,
   },
+  totalDlUsers: null,
+  totalUlUsers: null,
   signalQuality: 87,
-  uptime: 3456789, // ~40 días
+  uptime: 3456789,
   temperature: 42,
   lastUpdate: Date.now(),
 });
@@ -73,16 +77,38 @@ const uptimeFormatted = computed(() => {
   return `${days}d ${hours}h ${minutes}m`;
 });
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 // Funciones
+const fetchNodeLocation = async () => {
+  const response = await fetch(`${API_URL}/api/nodes/location`, { credentials: 'include' });
+  if (!response.ok) return;
+  const data = await response.json();
+  nodeStats.value.gpsLocation = data;
+};
+
+const fetchNodeRadio = async () => {
+  const response = await fetch(`${API_URL}/api/nodes/radio`, { credentials: 'include' });
+  if (!response.ok) return;
+  const data = await response.json();
+  nodeStats.value.transmitPower     = data.transmitPower;
+  nodeStats.value.downloadFrequency = data.downloadFrequency;
+  nodeStats.value.uploadFrequency   = data.uploadFrequency;
+};
+
+const fetchNodeThroughput = async () => {
+  const response = await fetch(`${API_URL}/api/nodes/throughput`, { credentials: 'include' });
+  if (!response.ok) return;
+  const data = await response.json();
+  nodeStats.value.throughput.download = data.dlThroughput;
+  nodeStats.value.throughput.upload   = data.ulThroughput;
+  nodeStats.value.totalDlUsers        = data.totalDlUsers;
+  nodeStats.value.totalUlUsers        = data.totalUlUsers;
+};
+
 const fetchNodeStats = async () => {
-  // TODO: Implementar llamada real al ACP
-  // const response = await fetch(`${API_URL}/api/network/node/${nodeId}`);
-  // nodeStats.value = await response.json();
-  
-  // Simulación de actualización de datos
+  // Simulación de actualización de datos (resto de métricas pendientes de API)
   if (nodeStats.value.status === 'active') {
-    nodeStats.value.throughput.download = 120 + Math.random() * 50;
-    nodeStats.value.throughput.upload = 80 + Math.random() * 40;
     nodeStats.value.signalQuality = 75 + Math.random() * 20;
     nodeStats.value.temperature = 38 + Math.random() * 8;
     nodeStats.value.uptime += 3;
@@ -92,7 +118,11 @@ const fetchNodeStats = async () => {
 
 const startPolling = () => {
   fetchNodeStats();
-  pollingInterval = setInterval(fetchNodeStats, 3000);
+  fetchNodeThroughput();
+  pollingInterval = setInterval(() => {
+    fetchNodeStats();
+    fetchNodeThroughput();
+  }, 3000);
 };
 
 const stopPolling = () => {
@@ -111,6 +141,8 @@ const getSignalQualityLabel = (quality: number): string => {
 
 // Lifecycle
 onMounted(() => {
+  fetchNodeLocation();
+  fetchNodeRadio();
   startPolling();
 });
 
@@ -121,6 +153,7 @@ onUnmounted(() => {
 
 <template>
   <div class="network-view">
+
     <!-- Header -->
     <div class="network-header">
       <div class="header-info">
@@ -146,13 +179,13 @@ onUnmounted(() => {
             <span class="stat-label">Calidad de Señal</span>
             <div class="stat-value-group">
               <div class="progress-bar">
-                <div 
-                  class="progress-fill" 
+                <div
+                  class="progress-fill"
                   :style="{ width: `${nodeStats.signalQuality}%`, backgroundColor: signalQualityColor }"
                 ></div>
               </div>
               <span class="stat-value" :style="{ color: signalQualityColor }">
-                {{ nodeStats.signalQuality.toFixed(0) }}% 
+                {{ nodeStats.signalQuality.toFixed(0) }}%
                 <span class="stat-unit">{{ getSignalQualityLabel(nodeStats.signalQuality) }}</span>
               </span>
             </div>
@@ -178,15 +211,15 @@ onUnmounted(() => {
         <div class="card-body">
           <div class="stat-row">
             <span class="stat-label">Potencia TX</span>
-            <span class="stat-value">{{ nodeStats.transmitPower }} <span class="stat-unit">dBm</span></span>
+            <span class="stat-value">{{ nodeStats.transmitPower ?? '--' }}<span v-if="nodeStats.transmitPower !== null" class="stat-unit"> dBm</span></span>
           </div>
           <div class="stat-row">
             <span class="stat-label">Frecuencia DL</span>
-            <span class="stat-value">{{ nodeStats.downloadFrequency }} <span class="stat-unit">MHz</span></span>
+            <span class="stat-value">{{ nodeStats.downloadFrequency ?? '--' }}<span v-if="nodeStats.downloadFrequency !== null" class="stat-unit"> MHz</span></span>
           </div>
           <div class="stat-row">
             <span class="stat-label">Frecuencia UL</span>
-            <span class="stat-value">{{ nodeStats.uploadFrequency }} <span class="stat-unit">MHz</span></span>
+            <span class="stat-value">{{ nodeStats.uploadFrequency ?? '--' }}<span v-if="nodeStats.uploadFrequency !== null" class="stat-unit"> MHz</span></span>
           </div>
         </div>
       </div>
@@ -201,7 +234,8 @@ onUnmounted(() => {
             <div class="throughput-icon">↓</div>
             <div class="throughput-info">
               <div class="throughput-label">Download</div>
-              <div class="throughput-value">{{ nodeStats.throughput.download.toFixed(1) }} <span class="stat-unit">Mbps</span></div>
+              <div class="throughput-value">{{ nodeStats.throughput.download !== null ? nodeStats.throughput.download.toFixed(1) : '--' }}<span v-if="nodeStats.throughput.download !== null" class="stat-unit"> Mbps</span></div>
+              <div class="throughput-users">{{ nodeStats.totalDlUsers !== null ? `${nodeStats.totalDlUsers} usuarios activos` : '--' }}</div>
             </div>
           </div>
           <div class="throughput-divider"></div>
@@ -209,7 +243,8 @@ onUnmounted(() => {
             <div class="throughput-icon">↑</div>
             <div class="throughput-info">
               <div class="throughput-label">Upload</div>
-              <div class="throughput-value">{{ nodeStats.throughput.upload.toFixed(1) }} <span class="stat-unit">Mbps</span></div>
+              <div class="throughput-value">{{ nodeStats.throughput.upload !== null ? nodeStats.throughput.upload.toFixed(1) : '--' }}<span v-if="nodeStats.throughput.upload !== null" class="stat-unit"> Mbps</span></div>
+              <div class="throughput-users">{{ nodeStats.totalUlUsers !== null ? `${nodeStats.totalUlUsers} usuarios activos` : '--' }}</div>
             </div>
           </div>
         </div>
@@ -227,15 +262,15 @@ onUnmounted(() => {
               <div class="gps-coords">
                 <div class="coord-row">
                   <span class="coord-label">Latitud:</span>
-                  <span class="coord-value">{{ nodeStats.gpsLocation.latitude.toFixed(6) }}°</span>
+                  <span class="coord-value">{{ nodeStats.gpsLocation.latitude !== null ? `${nodeStats.gpsLocation.latitude.toFixed(6)}°` : '--' }}</span>
                 </div>
                 <div class="coord-row">
                   <span class="coord-label">Longitud:</span>
-                  <span class="coord-value">{{ nodeStats.gpsLocation.longitude.toFixed(6) }}°</span>
+                  <span class="coord-value">{{ nodeStats.gpsLocation.longitude !== null ? `${nodeStats.gpsLocation.longitude.toFixed(6)}°` : '--' }}</span>
                 </div>
                 <div class="coord-row">
                   <span class="coord-label">Altitud:</span>
-                  <span class="coord-value">{{ nodeStats.gpsLocation.altitude }} m</span>
+                  <span class="coord-value">{{ nodeStats.gpsLocation.altitude !== null ? `${nodeStats.gpsLocation.altitude} m` : '--' }}</span>
                 </div>
               </div>
             </div>
@@ -253,7 +288,35 @@ onUnmounted(() => {
   padding: 24px;
   background: #f5f7fa;
   overflow-y: auto;
-  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Pantalla de carga */
+.loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 20px;
+}
+
+.loading-spinner {
+  width: 52px;
+  height: 52px;
+  border: 4px solid #e5e7eb;
+  border-top-color: #2d5088;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.loading-text {
+  font-size: 15px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Header */
@@ -469,6 +532,12 @@ onUnmounted(() => {
   margin-bottom: 4px;
 }
 
+.throughput-users {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
 .throughput-value {
   font-size: 20px;
   font-weight: 700;
@@ -510,6 +579,27 @@ onUnmounted(() => {
   padding: 8px 12px;
   background: #f9fafb;
   border-radius: 8px;
+}
+
+.coord-row.skeleton {
+  background: #f3f4f6;
+}
+
+.skeleton-label,
+.skeleton-value {
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+
+.skeleton-label { width: 60px; }
+.skeleton-value { width: 120px; }
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 .coord-label {
