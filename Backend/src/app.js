@@ -16,24 +16,6 @@ dotenv.config();
 /* ================= APP ================= */
 const app = express();
 
-/* ================= SSL ================= */
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const certsDir = path.join(__dirname, "..", "..", "certs");
-const certFile = path.join(certsDir, "cert.pem");
-const keyFile = path.join(certsDir, "key.pem");
-const useSSL = fs.existsSync(certFile) && fs.existsSync(keyFile);
-
-let sslOptions = {};
-if (useSSL) {
-  sslOptions = {
-    cert: fs.readFileSync(certFile),
-    key: fs.readFileSync(keyFile),
-  };
-  console.log("SSL activado - usando HTTPS");
-} else {
-  console.log("SSL no encontrado - usando HTTP");
-}
-
 /* ================= CORS ================= */
 app.use(cors({
   origin: true,
